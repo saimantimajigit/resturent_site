@@ -1,0 +1,15 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {assertBookingAllowed,assertTransition,BookingRuleError} from '../src/server/booking-policy.ts';
+const policy={advanceDays:60,cutoffMinutes:60,maxPartySize:6,durationMinutes:120,turnoverMinutes:15};
+const periods=[{dayOfWeek:4,startMinute:1080,endMinute:1380,active:true}];
+const now=new Date('2026-11-18T12:00:00+05:30');
+const base={date:'2026-11-19',time:'19:00',partySize:2,now,policy,periods,closures:[]};
+test('accepts booking during configured dinner service',()=>{const result=assertBookingAllowed(base);assert.equal(result.start.toISOString(),'2026-11-19T13:30:00.000Z')});
+test('rejects booking outside service',()=>assert.throws(()=>assertBookingAllowed({...base,time:'16:00'}),{code:'SERVICE_CLOSED'}));
+test('rejects party beyond capacity policy',()=>assert.throws(()=>assertBookingAllowed({...base,partySize:7}),{code:'PARTY_SIZE_INVALID'}));
+test('rejects blocked interval',()=>assert.throws(()=>assertBookingAllowed({...base,closures:[{startsAt:new Date('2026-11-19T12:00:00Z'),endsAt:new Date('2026-11-19T15:00:00Z')}]}),{code:'SERVICE_CLOSED'}));
+test('rejects expired cutoff',()=>assert.throws(()=>assertBookingAllowed({...base,now:new Date('2026-11-19T18:30:00+05:30')}),{code:'BOOKING_CUTOFF'}));
+test('rejects invalid calendar date',()=>assert.throws(()=>assertBookingAllowed({...base,date:'2026-11-31'}),{code:'INVALID_SLOT'}));
+test('permits check-in then seating',()=>{assert.doesNotThrow(()=>assertTransition('CONFIRMED','ARRIVED'));assert.doesNotThrow(()=>assertTransition('ARRIVED','SEATED'))});
+test('forbids invalid transitions',()=>assert.throws(()=>assertTransition('CANCELLED','SEATED'),{code:'INVALID_TRANSITION'}));

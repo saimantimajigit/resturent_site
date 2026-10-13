@@ -1,0 +1,52 @@
+screen_id,screen,domain,level
+01,Homepage,content,D
+02,Menu overview,menu,F
+03,Dish details,menu,F
+04,Tasting experience,experiences,D
+05,Reservation availability,reservations,F
+06,Reservation guest details,reservations,F
+07,Reservation confirmation,reservations,F
+08,Host dashboard,reception,F
+09,Reservation calendar,reservations,F
+10,Interactive floor plan,floor,F
+11,Login registration,identity,F
+12,Customer dashboard,guests,F
+13,My reservations,reservations,F
+14,Reservation details,reservations,F
+15,Profile preferences,guests,F
+16,Favorites,guests,D
+17,Order online,orders,F
+18,Cart checkout,orders,D
+19,Order tracking,orders,F
+20,Host dashboard,reception,F
+21,Reservation calendar,reception,F
+22,Reservation management,reservations,F
+23,Walk-in registration,reservations,F
+24,Interactive floor plan,floor,F
+25,Waitlist,waitlist,F
+26,Guest check-in,reception,F
+27,Live service board,assistance,F
+28,Kitchen queue,kitchen,F
+29,Kitchen ticket details,kitchen,F
+30,Menu availability,menu,F
+31,Order management,orders,F
+32,Order details,orders,F
+33,Refund cancellation review,payments,D
+34,Executive dashboard,analytics,F
+35,Menu management,menu,F
+36,Dish editor,menu,F
+37,Floor editor,floor,D
+38,Opening hours services,restaurant,F
+39,Guest CRM,guests,F
+40,Promotions experiences,promotions,D
+41,Revenue analytics,analytics,D
+42,Reservation analytics,analytics,F
+43,Team permissions,identity,D
+44,Website content manager,content,D
+45,Settings audit logs,audit,F
+46,Private dining enquiry,content,D
+47,Contact location,content,P
+48,QR menu landing,qr,F
+49,QR menu listing,qr,F
+50,QR dish details,qr,F
+51,Table assistance,assistance,F

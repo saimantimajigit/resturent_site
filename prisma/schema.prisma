@@ -1,0 +1,950 @@
+generator client {
+  provider = "prisma-client"
+  output = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum MembershipStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum RoleCode {
+  CUSTOMER
+  HOST
+  WAITER
+  CHEF
+  MANAGER
+  OWNER
+}
+
+enum ReservationStatus {
+  HELD
+  AWAITING_PAYMENT
+  CONFIRMED
+  ARRIVED
+  SEATED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+  EXPIRED
+}
+
+enum WaitlistStatus {
+  WAITING
+  NOTIFIED
+  SEATED
+  CANCELLED
+  EXPIRED
+}
+
+enum MenuItemStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum OrderType {
+  PICKUP
+  DELIVERY
+  DINE_IN
+}
+
+enum OrderStatus {
+  PLACED
+  ACCEPTED
+  PREPARING
+  READY
+  SERVED
+  COLLECTED
+  DELIVERED
+  CANCELLED
+  REJECTED
+}
+
+enum KitchenStatus {
+  NEW
+  PREPARING
+  READY
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum RefundStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  SIMULATED
+}
+
+enum AssistanceType {
+  WAITER
+  WATER
+  BILL
+  OTHER
+}
+
+enum AssistanceStatus {
+  OPEN
+  ACKNOWLEDGED
+  COMPLETED
+  CANCELLED
+}
+
+model User {
+  id String @id @default(uuid()) @db.Uuid
+  email String? @unique
+  name String
+  status UserStatus @default(ACTIVE)
+  passwordHash String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  Session_userId Session[] @relation("Session_userId")
+
+  StaffMembership_userId StaffMembership[] @relation("StaffMembership_userId")
+
+  ReservationEvent_actorUserId ReservationEvent[] @relation("ReservationEvent_actorUserId")
+
+  OrderEvent_actorUserId OrderEvent[] @relation("OrderEvent_actorUserId")
+
+  AuditLog_actorUserId AuditLog[] @relation("AuditLog_actorUserId")
+}
+
+model Session {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  tokenHash String @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+
+  userRef User @relation("Session_userId", fields: [userId], references: [id], onDelete: Restrict)
+}
+
+model Role {
+  id String @id @default(uuid()) @db.Uuid
+  code RoleCode @unique
+  name String
+
+  RolePermission_roleId RolePermission[] @relation("RolePermission_roleId")
+
+  StaffRole_roleId StaffRole[] @relation("StaffRole_roleId")
+}
+
+model Permission {
+  id String @id @default(uuid()) @db.Uuid
+  key String @unique
+  description String?
+
+  RolePermission_permissionId RolePermission[] @relation("RolePermission_permissionId")
+}
+
+model RolePermission {
+  id String @id @default(uuid()) @db.Uuid
+  roleId String @db.Uuid
+  permissionId String @db.Uuid
+  @@unique([roleId, permissionId])
+
+  roleRef Role @relation("RolePermission_roleId", fields: [roleId], references: [id], onDelete: Restrict)
+
+  permissionRef Permission @relation("RolePermission_permissionId", fields: [permissionId], references: [id], onDelete: Restrict)
+}
+
+model StaffMembership {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  restaurantId String @db.Uuid
+  status MembershipStatus @default(ACTIVE)
+  createdAt DateTime @default(now())
+  @@index([restaurantId])
+  @@unique([userId, restaurantId])
+
+  userRef User @relation("StaffMembership_userId", fields: [userId], references: [id], onDelete: Restrict)
+
+  restaurantRef Restaurant @relation("StaffMembership_restaurantId", fields: [restaurantId], references: [id], onDelete: Restrict)
+
+  StaffRole_staffMembershipId StaffRole[] @relation("StaffRole_staffMembershipId")
+}
+
+model StaffRole {
+  id String @id @default(uuid()) @db.Uuid
+  staffMembershipId String @db.Uuid
+  roleId String @db.Uuid
+  @@unique([staffMembershipId, roleId])
+
+  staffMembershipRef StaffMembership @relation("StaffRole_staffMembershipId", fields: [staffMembershipId], references: [id], onDelete: Restrict)
+
+  roleRef Role @relation("StaffRole_roleId", fields: [roleId], references: [id], onDelete: Restrict)
+}
+
+model GuestProfile {
+  id String @id @default(uuid()) @db.Uuid
+  userId String? @unique @db.Uuid
+  name String
+  email String?
+  phone String?
+  vip Boolean @default(false)
+  createdAt DateTime @default(now())
+
+  GuestPreference_guestProfileId GuestPreference[] @relation("GuestPreference_guestProfileId")
+
+  GuestConsent_guestProfileId GuestConsent[] @relation("GuestConsent_guestProfileId")
+
+  Reservation_guestProfileId Reservation[] @relation("Reservation_guestProfileId")
+
+  WaitlistEntry_guestProfileId WaitlistEntry[] @relation("WaitlistEntry_guestProfileId")
+
+  Order_guestProfileId Order[] @relation("Order_guestProfileId")
+}
+
+model GuestPreference {
+  id String @id @default(uuid()) @db.Uuid
+  guestProfileId String @db.Uuid
+  kind String
+  value String
+
+  guestProfileRef GuestProfile @relation("GuestPreference_guestProfileId", fields: [guestProfileId], references: [id], onDelete: Restrict)
+}
+
+model GuestConsent {
+  id String @id @default(uuid()) @db.Uuid
+  guestProfileId String @db.Uuid
+  purpose String
+  granted Boolean
+  recordedAt DateTime @default(now())
+
+  guestProfileRef GuestProfile @relation("GuestConsent_guestProfileId", fields: [guestProfileId], references: [id], onDelete: Restrict)
+}
+
+model Restaurant {
+  id String @id @default(uuid()) @db.Uuid
+  demoEnvironmentId String @db.Uuid
+  name String
+  slug String @unique
+  timezone String @default("Asia/Kolkata")
+  currency String @default("INR")
+  address Json?
+  createdAt DateTime @default(now())
+
+  StaffMembership_restaurantId StaffMembership[] @relation("StaffMembership_restaurantId")
+
+  demoEnvironmentRef DemoEnvironment @relation("Restaurant_demoEnvironmentId", fields: [demoEnvironmentId], references: [id], onDelete: Restrict)
+
+  DiningZone_restaurantId DiningZone[] @relation("DiningZone_restaurantId")
+
+  DiningTable_restaurantId DiningTable[] @relation("DiningTable_restaurantId")
+
+  TableCombination_restaurantId TableCombination[] @relation("TableCombination_restaurantId")
+
+  ServicePeriod_restaurantId ServicePeriod[] @relation("ServicePeriod_restaurantId")
+
+  SpecialClosure_restaurantId SpecialClosure[] @relation("SpecialClosure_restaurantId")
+
+  Reservation_restaurantId Reservation[] @relation("Reservation_restaurantId")
+
+  ReservationTable_restaurantId ReservationTable[] @relation("ReservationTable_restaurantId")
+
+  TableOccupancy_restaurantId TableOccupancy[] @relation("TableOccupancy_restaurantId")
+
+  WaitlistEntry_restaurantId WaitlistEntry[] @relation("WaitlistEntry_restaurantId")
+
+  Menu_restaurantId Menu[] @relation("Menu_restaurantId")
+
+  MediaAsset_restaurantId MediaAsset[] @relation("MediaAsset_restaurantId")
+
+  DiningExperience_restaurantId DiningExperience[] @relation("DiningExperience_restaurantId")
+
+  Order_restaurantId Order[] @relation("Order_restaurantId")
+
+  AssistanceRequest_restaurantId AssistanceRequest[] @relation("AssistanceRequest_restaurantId")
+
+  ContentPage_restaurantId ContentPage[] @relation("ContentPage_restaurantId")
+
+  GalleryItem_restaurantId GalleryItem[] @relation("GalleryItem_restaurantId")
+
+  PrivateDiningEnquiry_restaurantId PrivateDiningEnquiry[] @relation("PrivateDiningEnquiry_restaurantId")
+
+  Promotion_restaurantId Promotion[] @relation("Promotion_restaurantId")
+
+  Notification_restaurantId Notification[] @relation("Notification_restaurantId")
+
+  OutboxEvent_restaurantId OutboxEvent[] @relation("OutboxEvent_restaurantId")
+
+  AuditLog_restaurantId AuditLog[] @relation("AuditLog_restaurantId")
+}
+
+model DemoEnvironment {
+  id String @id @default(uuid()) @db.Uuid
+  name String @unique
+  seedVersion String
+  createdAt DateTime @default(now())
+
+  Restaurant_demoEnvironmentId Restaurant[] @relation("Restaurant_demoEnvironmentId")
+
+  DemoSeedRun_demoEnvironmentId DemoSeedRun[] @relation("DemoSeedRun_demoEnvironmentId")
+}
+
+model DemoSeedRun {
+  id String @id @default(uuid()) @db.Uuid
+  demoEnvironmentId String @db.Uuid
+  seedVersion String
+  startedAt DateTime @default(now())
+  completedAt DateTime?
+
+  demoEnvironmentRef DemoEnvironment @relation("DemoSeedRun_demoEnvironmentId", fields: [demoEnvironmentId], references: [id], onDelete: Restrict)
+}
+
+model DiningZone {
+  id String @id @default(uuid()) @db.Uuid
+  restaurantId String @db.Uuid
+  name String
+  sortOrder Int @default(0)
+  active Boolean @default(true)
+  @@index([restaurantId])
+
+  restaurantRef Restaurant @relation("DiningZone_restaurantId", fields: [restaurantId], references: [id], onDelete: Restrict)
+
+  DiningTable_diningZoneId DiningTable[] @relation("DiningTable_diningZoneId")
+}
+
+model DiningTable {
+  id String @id @default(uuid()) @db.Uuid
+  restaurantId String @db.Uuid
+  diningZoneId String @db.Uuid
+  label String
+  minCapacity Int @default(1)
+  maxCapacity Int
+  active Boolean @default(true)
+  x Float @default(0)
+  y Float @default(0)
+  @@index([restaurantId])
+  @@unique([restaurantId, label])
+
+  restaurantRef Restaurant @relation("DiningTable_restaurantId", fields: [restaurantId], references: [id], onDelete: Restrict)
+
+  diningZoneRef DiningZone @relation("DiningTable_diningZoneId", fields: [diningZoneId], references: [id], onDelete: Restrict)
+
+  TableCombinationMember_diningTableId TableCombinationMember[] @relation("TableCombinationMember_diningTableId")
+
+  ReservationTable_diningTableId ReservationTable[] @relation("ReservationTable_diningTableId")
+
+  TableOccupancy_diningTableId TableOccupancy[] @relation("TableOccupancy_diningTableId")
+
+  TableToken_diningTableId TableToken[] @relation("TableToken_diningTableId")
+
+  AssistanceRequest_diningTableId AssistanceRequest[] @relation("AssistanceRequest_diningTableId")
+}
+
+model TableCombination {
+  id String @id @default(uuid()) @db.Uuid
+  restaurantId String @db.Uuid
+  name String
+  active Boolean @default(true)
+  @@index([restaurantId])
+
+  restaurantRef Restaurant @relation("TableCombination_restaurantId", fields: [restaurantId], references: [id], onDelete: Restrict)
+
+  TableCombinationMember_tableCombinationId TableCombinationMember[] @relation("TableCombinationMember_tableCombinationId")
+}
+
+model TableCombinationMember {
+  id String @id @default(uuid()) @db.Uuid
+  tableCombinationId String @db.Uuid
+  diningTableId String @db.Uuid
+  @@unique([tableCombinationId, diningTableId])
+
+  tableCombinationRef TableCombination @relation("TableCombinationMember_tableCombinationId", fields: [tableCombinationId], references: [id], onDelete: Restrict)
+
+  diningTableRef DiningTable @relation("TableCombinationMember_diningTableId", fields: [diningTableId], references: [id], onDelete: Restrict)
+}
+
+model ServicePeriod {
+  id String @id @default(uuid()) @db.Uuid
+  restaurantId String @db.Uuid
+  dayOfWeek Int
+  mealType String
+  startMinute Int
+  endMinute Int
+  active Boolean @default(true)
+  @@index([restaurantId])
+
+  restaurantRef Restaurant @relation("ServicePeriod_restaurantId", fields: [restaurantId], references: [id], onDelete: Restrict)
+}
+
+model SpecialClosure {
+  id String @id @default(uuid()) @db.Uuid
+  restaurantId String @db.Uuid
+  startsAt DateTime
+  endsAt DateTime
+  reason String
+  @@index([restaurantId])
+
+  restaurantRef Restaurant @relation("SpecialClosure_restaurantId", fields: [restaurantId], references: [id], onDelete: Restrict)
+}
+
+model BookingPolicy {
+  id String @id @default(uuid()) @db.Uuid
+  restaurantId String @unique @db.Uuid
+  advanceDays Int @default(60)
+  durationMinutes Int @default(120)
+  turnoverMinutes Int @default(15)
+  cutoffMinutes Int @default(60)
+  maxPartySize Int @default(12)
+  @@index([restaurantId])
+}
+
+model Reservation {
+  id String @id @default(uuid()) @db.Uuid
+  restaurantId String @db.Uuid
+  guestProfileId String @db.Uuid
+  reference String @unique
+  partySize Int
+  startsAt DateTime
+  endsAt DateTime
+  status ReservationStatus @default(CONFIRMED)
+  notes String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([restaurantId])
+  @@index([restaurantId, startsAt, status])
+
+  restaurantRef Restaurant @relation("Reservation_restaurantId", fields: [restaurantId], references: [id], onDelete: Restrict)
+
+  guestProfileRef GuestProfile @relation("Reservation_guestProfileId", fields: [guestProfileId], references: [id], onDelete: Restrict)
+
+  ReservationTable_reservationId ReservationTable[] @relation("ReservationTable_reservationId")
+
+  ReservationEvent_reservationId ReservationEvent[] @relation("ReservationEvent_reservationId")
+
+  GuestManageToken_reservationId GuestManageToken[] @relation("GuestManageToken_reservationId")
+
+  Order_reservationId Order[] @relation("Order_reservationId")
+
+  Payment_reservationId Payment[] @relation("Payment_reservationId")
+}
+
+model ReservationTable {
+  id String @id @default(uuid()) @db.Uuid
+  restaurantId String @db.Uuid
+  reservationId String @db.Uuid
+  diningTableId String @db.Uuid
+  startsAt DateTime
+  endsAt DateTime
+  @@index([restaurantId])
+
+  restaurantRef Restaurant @relation("ReservationTable_restaurantId", fields: [restaurantId], references: [id], onDelete: Restrict)
+
+  reservationRef Reservation @relation("ReservationTable_reservationId", fields: [reservationId], references: [id], onDelete: Restrict)
+
+  diningTableRef DiningTable @relation("ReservationTable_diningTableId", fields: [diningTableId], references: [id], onDelete: Restrict)
+}
+
+model TableOccupancy {
+  id String @id @default(uuid()) @db.Uuid
+  restaurantId String @db.Uuid
+  reservationTableId String @unique @db.Uuid
+  diningTableId String @db.Uuid
+  startsAt DateTime
+  endsAt DateTime
+  active Boolean @default(true)
+  @@index([restaurantId])
+  @@index([diningTableId, startsAt])
+
+  restaurantRef Restaurant @relation("TableOccupancy_restaurantId", fields: [restaurantId], references: [id], onDelete: Restrict)
+
+  diningTableRef DiningTable @relation("TableOccupancy_diningTableId", fields: [diningTableId], references: [id], onDelete: Restrict)
+}
+
+model ReservationHold {
+  id String @id @default(uuid()) @db.Uuid
+  reservationId String @unique @db.Uuid
+  expiresAt DateTime
+  releasedAt DateTime?
+}
+
+model ReservationEvent {
+  id String @id @default(uuid()) @db.Uuid
+  reservationId String @db.Uuid
+  actorUserId String? @db.Uuid
+  fromStatus String?
+  toStatus String
+  createdAt DateTime @default(now())
+  metadata Json?
+
+  reservationRef Reservation @relation("ReservationEvent_reservationId", fields: [reservationId], references: [id], onDelete: Restrict)
+
+  actorUserRef User? @relation("ReservationEvent_actorUserId", fields: [actorUserId], references: [id], onDelete: Restrict)
+}
+
+model GuestManageToken {
+  id String @id @default(uuid()) @db.Uuid
+  reservationId String @db.Uuid
+  tokenHash String @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+
+  reservationRef Reservation @relation("GuestManageToken_reservationId", fields: [reservationId], references: [id], onDelete: Restrict)
+}
+
+model WaitlistEntry {
+  id String @id @default(uuid()) @db.Uuid
+  restaurantId String @db.Uuid
+  guestProfileId String @db.Uuid
+  partySize Int
+  status WaitlistStatus @default(WAITING)
+  createdAt DateTime @default(now())
+  quotedMinutes Int?
+  @@index([restaurantId])
+
+  restaurantRef Restaurant @relation("WaitlistEntry_restaurantId", fields: [restaurantId], references: [id], onDelete: Restrict)
+
+  guestProfileRef GuestProfile @relation("WaitlistEntry_guestProfileId", fields: [guestProfileId], references: [id], onDelete: Restrict)
+
+  WaitlistEvent_waitlistEntryId WaitlistEvent[] @relation("WaitlistEvent_waitlistEntryId")
+}
+
+model WaitlistEvent {
+  id String @id @default(uuid()) @db.Uuid
+  waitlistEntryId String @db.Uuid
+  status String
+  createdAt DateTime @default(now())
+
+  waitlistEntryRef WaitlistEntry @relation("WaitlistEvent_waitlistEntryId", fields: [waitlistEntryId], references: [id], onDelete: Restrict)
+}
+
+model Menu {
+  id String @id @default(uuid()) @db.Uuid
+  restaurantId String @db.Uuid
+  name String
+  published Boolean @default(false)
+  sortOrder Int @default(0)
+  @@index([restaurantId])
+
+  restaurantRef Restaurant @relation("Menu_restaurantId", fields: [restaurantId], references: [id], onDelete: Restrict)
+
+  MenuCategory_menuId MenuCategory[] @relation("MenuCategory_menuId")
+}
+
+model MenuCategory {
+  id String @id @default(uuid()) @db.Uuid
+  menuId String @db.Uuid
+  name String
+  sortOrder Int @default(0)
+
+  menuRef Menu @relation("MenuCategory_menuId", fields: [menuId], references: [id], onDelete: Restrict)
+
+  MenuItem_menuCategoryId MenuItem[] @relation("MenuItem_menuCategoryId")
+}
+
+model MenuItem {
+  id String @id @default(uuid()) @db.Uuid
+  menuCategoryId String @db.Uuid
+  name String
+  slug String
+  description String?
+  status MenuItemStatus @default(DRAFT)
+  vegetarian Boolean @default(false)
+  imageUrl String?
+
+  menuCategoryRef MenuCategory @relation("MenuItem_menuCategoryId", fields: [menuCategoryId], references: [id], onDelete: Restrict)
+
+  MenuItemPrice_menuItemId MenuItemPrice[] @relation("MenuItemPrice_menuItemId")
+
+  MenuItemAllergen_menuItemId MenuItemAllergen[] @relation("MenuItemAllergen_menuItemId")
+
+  MenuAvailability_menuItemId MenuAvailability[] @relation("MenuAvailability_menuItemId")
+
+  MenuItemMedia_menuItemId MenuItemMedia[] @relation("MenuItemMedia_menuItemId")
+
+  ExperienceCourse_menuItemId ExperienceCourse[] @relation("ExperienceCourse_menuItemId")
+
+  OrderItem_menuItemId OrderItem[] @relation("OrderItem_menuItemId")
+}
+
+model MenuItemPrice {
+  id String @id @default(uuid()) @db.Uuid
+  menuItemId String @db.Uuid
+  amountMinor BigInt
+  currency String @default("INR")
+  effectiveFrom DateTime @default(now())
+  effectiveTo DateTime?
+
+  menuItemRef MenuItem @relation("MenuItemPrice_menuItemId", fields: [menuItemId], references: [id], onDelete: Restrict)
+}
+
+model Allergen {
+  id String @id @default(uuid()) @db.Uuid
+  code String @unique
+  name String
+
+  MenuItemAllergen_allergenId MenuItemAllergen[] @relation("MenuItemAllergen_allergenId")
+}
+
+model MenuItemAllergen {
+  id String @id @default(uuid()) @db.Uuid
+  menuItemId String @db.Uuid
+  allergenId String @db.Uuid
+  @@unique([menuItemId, allergenId])
+
+  menuItemRef MenuItem @relation("MenuItemAllergen_menuItemId", fields: [menuItemId], references: [id], onDelete: Restrict)
+
+  allergenRef Allergen @relation("MenuItemAllergen_allergenId", fields: [allergenId], references: [id], onDelete: Restrict)
+}
+
+model MenuAvailability {
+  id String @id @default(uuid()) @db.Uuid
+  menuItemId String @db.Uuid
+  available Boolean @default(true)
+  reason String?
+  updatedAt DateTime @updatedAt
+  @@unique([menuItemId])
+
+  menuItemRef MenuItem @relation("MenuAvailability_menuItemId", fields: [menuItemId], references: [id], onDelete: Restrict)
+}
+
+model MediaAsset {
+  id String @id @default(uuid()) @db.Uuid
+  restaurantId String @db.Uuid
+  storageKey String @unique
+  altText String
+  mimeType String
+  createdAt DateTime @default(now())
+  @@index([restaurantId])
+
+  restaurantRef Restaurant @relation("MediaAsset_restaurantId", fields: [restaurantId], references: [id], onDelete: Restrict)
+
+  MenuItemMedia_mediaAssetId MenuItemMedia[] @relation("MenuItemMedia_mediaAssetId")
+
+  GalleryItem_mediaAssetId GalleryItem[] @relation("GalleryItem_mediaAssetId")
+}
+
+model MenuItemMedia {
+  id String @id @default(uuid()) @db.Uuid
+  menuItemId String @db.Uuid
+  mediaAssetId String @db.Uuid
+  sortOrder Int @default(0)
+
+  menuItemRef MenuItem @relation("MenuItemMedia_menuItemId", fields: [menuItemId], references: [id], onDelete: Restrict)
+
+  mediaAssetRef MediaAsset @relation("MenuItemMedia_mediaAssetId", fields: [mediaAssetId], references: [id], onDelete: Restrict)
+}
+
+model DiningExperience {
+  id String @id @default(uuid()) @db.Uuid
+  restaurantId String @db.Uuid
+  title String
+  description String?
+  priceMinor BigInt
+  active Boolean @default(true)
+  @@index([restaurantId])
+
+  restaurantRef Restaurant @relation("DiningExperience_restaurantId", fields: [restaurantId], references: [id], onDelete: Restrict)
+
+  ExperienceCourse_diningExperienceId ExperienceCourse[] @relation("ExperienceCourse_diningExperienceId")
+}
+
+model ExperienceCourse {
+  id String @id @default(uuid()) @db.Uuid
+  diningExperienceId String @db.Uuid
+  menuItemId String? @db.Uuid
+  sequence Int
+  title String
+
+  diningExperienceRef DiningExperience @relation("ExperienceCourse_diningExperienceId", fields: [diningExperienceId], references: [id], onDelete: Restrict)
+
+  menuItemRef MenuItem? @relation("ExperienceCourse_menuItemId", fields: [menuItemId], references: [id], onDelete: Restrict)
+}
+
+model Order {
+  id String @id @default(uuid()) @db.Uuid
+  restaurantId String @db.Uuid
+  guestProfileId String @db.Uuid
+  reservationId String? @db.Uuid
+  reference String @unique
+  type OrderType
+  status OrderStatus @default(PLACED)
+  subtotalMinor BigInt
+  taxMinor BigInt @default(0)
+  totalMinor BigInt
+  currency String @default("INR")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([restaurantId])
+  @@index([restaurantId, createdAt])
+
+  restaurantRef Restaurant @relation("Order_restaurantId", fields: [restaurantId], references: [id], onDelete: Restrict)
+
+  guestProfileRef GuestProfile @relation("Order_guestProfileId", fields: [guestProfileId], references: [id], onDelete: Restrict)
+
+  reservationRef Reservation? @relation("Order_reservationId", fields: [reservationId], references: [id], onDelete: Restrict)
+
+  OrderItem_orderId OrderItem[] @relation("OrderItem_orderId")
+
+  OrderEvent_orderId OrderEvent[] @relation("OrderEvent_orderId")
+
+  KitchenTicket_orderId KitchenTicket[] @relation("KitchenTicket_orderId")
+
+  Payment_orderId Payment[] @relation("Payment_orderId")
+}
+
+model OrderItem {
+  id String @id @default(uuid()) @db.Uuid
+  orderId String @db.Uuid
+  menuItemId String @db.Uuid
+  nameSnapshot String
+  unitPriceMinor BigInt
+  quantity Int
+  lineTotalMinor BigInt
+  notes String?
+
+  orderRef Order @relation("OrderItem_orderId", fields: [orderId], references: [id], onDelete: Restrict)
+
+  menuItemRef MenuItem @relation("OrderItem_menuItemId", fields: [menuItemId], references: [id], onDelete: Restrict)
+
+  OrderItemModifier_orderItemId OrderItemModifier[] @relation("OrderItemModifier_orderItemId")
+
+  KitchenTicketItem_orderItemId KitchenTicketItem[] @relation("KitchenTicketItem_orderItemId")
+}
+
+model OrderItemModifier {
+  id String @id @default(uuid()) @db.Uuid
+  orderItemId String @db.Uuid
+  label String
+  amountMinor BigInt
+
+  orderItemRef OrderItem @relation("OrderItemModifier_orderItemId", fields: [orderItemId], references: [id], onDelete: Restrict)
+}
+
+model OrderEvent {
+  id String @id @default(uuid()) @db.Uuid
+  orderId String @db.Uuid
+  actorUserId String? @db.Uuid
+  fromStatus String?
+  toStatus String
+  createdAt DateTime @default(now())
+
+  orderRef Order @relation("OrderEvent_orderId", fields: [orderId], references: [id], onDelete: Restrict)
+
+  actorUserRef User? @relation("OrderEvent_actorUserId", fields: [actorUserId], references: [id], onDelete: Restrict)
+}
+
+model KitchenTicket {
+  id String @id @default(uuid()) @db.Uuid
+  orderId String @db.Uuid
+  station String
+  status KitchenStatus @default(NEW)
+  createdAt DateTime @default(now())
+  startedAt DateTime?
+  completedAt DateTime?
+  @@index([status, createdAt])
+
+  orderRef Order @relation("KitchenTicket_orderId", fields: [orderId], references: [id], onDelete: Restrict)
+
+  KitchenTicketItem_kitchenTicketId KitchenTicketItem[] @relation("KitchenTicketItem_kitchenTicketId")
+}
+
+model KitchenTicketItem {
+  id String @id @default(uuid()) @db.Uuid
+  kitchenTicketId String @db.Uuid
+  orderItemId String @db.Uuid
+  status KitchenStatus @default(NEW)
+
+  kitchenTicketRef KitchenTicket @relation("KitchenTicketItem_kitchenTicketId", fields: [kitchenTicketId], references: [id], onDelete: Restrict)
+
+  orderItemRef OrderItem @relation("KitchenTicketItem_orderItemId", fields: [orderItemId], references: [id], onDelete: Restrict)
+}
+
+model Payment {
+  id String @id @default(uuid()) @db.Uuid
+  orderId String? @db.Uuid
+  reservationId String? @db.Uuid
+  provider String @default("DEMO")
+  amountMinor BigInt
+  status PaymentStatus @default(PENDING)
+  createdAt DateTime @default(now())
+
+  orderRef Order? @relation("Payment_orderId", fields: [orderId], references: [id], onDelete: Restrict)
+
+  reservationRef Reservation? @relation("Payment_reservationId", fields: [reservationId], references: [id], onDelete: Restrict)
+
+  PaymentAttempt_paymentId PaymentAttempt[] @relation("PaymentAttempt_paymentId")
+
+  Refund_paymentId Refund[] @relation("Refund_paymentId")
+}
+
+model PaymentAttempt {
+  id String @id @default(uuid()) @db.Uuid
+  paymentId String @db.Uuid
+  idempotencyKey String @unique
+  result String
+  createdAt DateTime @default(now())
+
+  paymentRef Payment @relation("PaymentAttempt_paymentId", fields: [paymentId], references: [id], onDelete: Restrict)
+}
+
+model Refund {
+  id String @id @default(uuid()) @db.Uuid
+  paymentId String @db.Uuid
+  amountMinor BigInt
+  status RefundStatus @default(REQUESTED)
+  reason String
+  createdAt DateTime @default(now())
+
+  paymentRef Payment @relation("Refund_paymentId", fields: [paymentId], references: [id], onDelete: Restrict)
+}
+
+model TableToken {
+  id String @id @default(uuid()) @db.Uuid
+  diningTableId String @db.Uuid
+  tokenHash String @unique
+  active Boolean @default(true)
+  expiresAt DateTime?
+
+  diningTableRef DiningTable @relation("TableToken_diningTableId", fields: [diningTableId], references: [id], onDelete: Restrict)
+}
+
+model AssistanceRequest {
+  id String @id @default(uuid()) @db.Uuid
+  restaurantId String @db.Uuid
+  diningTableId String @db.Uuid
+  type AssistanceType
+  status AssistanceStatus @default(OPEN)
+  createdAt DateTime @default(now())
+  completedAt DateTime?
+  @@index([restaurantId])
+
+  restaurantRef Restaurant @relation("AssistanceRequest_restaurantId", fields: [restaurantId], references: [id], onDelete: Restrict)
+
+  diningTableRef DiningTable @relation("AssistanceRequest_diningTableId", fields: [diningTableId], references: [id], onDelete: Restrict)
+}
+
+model ContentPage {
+  id String @id @default(uuid()) @db.Uuid
+  restaurantId String @db.Uuid
+  slug String
+  title String
+  published Boolean @default(false)
+  @@index([restaurantId])
+
+  restaurantRef Restaurant @relation("ContentPage_restaurantId", fields: [restaurantId], references: [id], onDelete: Restrict)
+
+  ContentBlock_contentPageId ContentBlock[] @relation("ContentBlock_contentPageId")
+}
+
+model ContentBlock {
+  id String @id @default(uuid()) @db.Uuid
+  contentPageId String @db.Uuid
+  blockType String
+  content Json
+  sortOrder Int @default(0)
+
+  contentPageRef ContentPage @relation("ContentBlock_contentPageId", fields: [contentPageId], references: [id], onDelete: Restrict)
+}
+
+model GalleryItem {
+  id String @id @default(uuid()) @db.Uuid
+  restaurantId String @db.Uuid
+  mediaAssetId String @db.Uuid
+  sortOrder Int @default(0)
+  @@index([restaurantId])
+
+  restaurantRef Restaurant @relation("GalleryItem_restaurantId", fields: [restaurantId], references: [id], onDelete: Restrict)
+
+  mediaAssetRef MediaAsset @relation("GalleryItem_mediaAssetId", fields: [mediaAssetId], references: [id], onDelete: Restrict)
+}
+
+model PrivateDiningEnquiry {
+  id String @id @default(uuid()) @db.Uuid
+  restaurantId String @db.Uuid
+  guestName String
+  email String
+  partySize Int
+  preferredAt DateTime?
+  status String @default("NEW")
+  message String?
+  @@index([restaurantId])
+
+  restaurantRef Restaurant @relation("PrivateDiningEnquiry_restaurantId", fields: [restaurantId], references: [id], onDelete: Restrict)
+}
+
+model Promotion {
+  id String @id @default(uuid()) @db.Uuid
+  restaurantId String @db.Uuid
+  code String
+  description String
+  startsAt DateTime
+  endsAt DateTime
+  active Boolean @default(false)
+  @@index([restaurantId])
+
+  restaurantRef Restaurant @relation("Promotion_restaurantId", fields: [restaurantId], references: [id], onDelete: Restrict)
+}
+
+model Notification {
+  id String @id @default(uuid()) @db.Uuid
+  restaurantId String @db.Uuid
+  channel String
+  recipient String
+  status String
+  demoOnly Boolean @default(true)
+  createdAt DateTime @default(now())
+  @@index([restaurantId])
+
+  restaurantRef Restaurant @relation("Notification_restaurantId", fields: [restaurantId], references: [id], onDelete: Restrict)
+}
+
+model OutboxEvent {
+  id String @id @default(uuid()) @db.Uuid
+  restaurantId String @db.Uuid
+  type String
+  payload Json
+  createdAt DateTime @default(now())
+  processedAt DateTime?
+  @@index([restaurantId])
+
+  restaurantRef Restaurant @relation("OutboxEvent_restaurantId", fields: [restaurantId], references: [id], onDelete: Restrict)
+}
+
+model IdempotencyRecord {
+  id String @id @default(uuid()) @db.Uuid
+  scope String
+  key String
+  requestHash String
+  result Json?
+  createdAt DateTime @default(now())
+  @@unique([scope, key])
+}
+
+model AuditLog {
+  id String @id @default(uuid()) @db.Uuid
+  restaurantId String? @db.Uuid
+  actorUserId String? @db.Uuid
+  action String
+  resource String
+  resourceId String?
+  before Json?
+  after Json?
+  requestId String
+  createdAt DateTime @default(now())
+  @@index([restaurantId])
+
+  restaurantRef Restaurant? @relation("AuditLog_restaurantId", fields: [restaurantId], references: [id], onDelete: Restrict)
+
+  actorUserRef User? @relation("AuditLog_actorUserId", fields: [actorUserId], references: [id], onDelete: Restrict)
+}

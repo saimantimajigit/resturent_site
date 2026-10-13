@@ -1,0 +1,3 @@
+import type { Metadata } from 'next'; import './globals.css';
+export const metadata:Metadata={title:'SAVORÉ — Fine Dining',description:'SAVORÉ connected restaurant demonstration'};
+export default function RootLayout({children}:{children:React.ReactNode}){return <html lang="en"><body><header className="topbar"><nav className="nav"><a className="wordmark" href="/">SAVORÉ</a><div className="navlinks"><a href="/menu">Menu</a><a href="/reservations">Reserve</a><a href="/staff/host">Host</a><a href="/demo">Demo access</a></div></nav></header>{children}<footer className="footer"><div className="layout">SAVORÉ · Demonstration only · All names, prices and reservations are fictional</div></footer></body></html>}

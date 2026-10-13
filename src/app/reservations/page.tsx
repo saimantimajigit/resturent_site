@@ -1,0 +1,1 @@
+import BookingForm from './booking-form';export default function Reservations(){return <main className="layout"><p className="eyebrow">Your evening awaits</p><h1>Reserve a table</h1><BookingForm/></main>}
