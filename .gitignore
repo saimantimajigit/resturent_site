@@ -1,5 +1,8 @@
 node_modules
 .next
+.next-dev
+.next-prod
+.npm-cache
 .env
 .env.local
 src/generated

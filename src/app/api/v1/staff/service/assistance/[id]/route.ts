@@ -11,7 +11,7 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
   try{
     const context=await staffContext(['WAITER','HOST','MANAGER','OWNER']);const {id}=await params;const body=input.parse(await request.json());
     const waiterScope=context.roles.includes('WAITER')&&!hasOperationsAccess(context.roles)?context.membership.id:undefined;
-    return NextResponse.json({data:await setAssistanceStatus({restaurantId:context.restaurantId,requestId:id,target:body.status,waiterMembershipId:waiterScope})});
+    return NextResponse.json({data:await setAssistanceStatus({restaurantId:context.restaurantId,requestId:id,actorUserId:context.user.id,target:body.status,waiterMembershipId:waiterScope})});
   }catch(error){
     if(error instanceof AuthenticationError)return NextResponse.json({error:{code:'UNAUTHENTICATED',message:'Sign in required.'}},{status:401});
     if(error instanceof AuthorizationError)return NextResponse.json({error:{code:'FORBIDDEN',message:'Waiter access required.'}},{status:403});

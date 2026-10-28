@@ -37,6 +37,12 @@ export async function changeReservationStatus(id:string,target:'ARRIVED'|'SEATED
   if(changed.count!==1)throw new Error('STATE_CONFLICT');
   let releasedTableIds:string[]=[];
   if(target==='CANCELLED'||target==='COMPLETED'||target==='NO_SHOW'){
+   const qrSessions=await tx.diningSession.findMany({where:{restaurantId,reservationId:id,status:'ACTIVE'},select:{id:true}});
+   for(const session of qrSessions){
+    await tx.diningSession.update({where:{id:session.id},data:{status:'CLOSED',closedAt:new Date()}});
+    await tx.diningGuestToken.updateMany({where:{diningSessionId:session.id,revokedAt:null},data:{revokedAt:new Date()}});
+    await tx.diningSessionEvent.create({data:{diningSessionId:session.id,actorUserId:actor.id,event:'QR_SESSION_CLOSED_WITH_RESERVATION',metadata:{reservationStatus:target}}});
+   }
    const assignments=await tx.reservationTable.findMany({where:{reservationId:id,restaurantId},select:{id:true,diningTableId:true}});
    await tx.tableOccupancy.updateMany({where:{reservationTableId:{in:assignments.map(a=>a.id)}},data:{active:false}});
    releasedTableIds=assignments.map(a=>a.diningTableId);

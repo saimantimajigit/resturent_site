@@ -1,11 +1,11 @@
 import FloorLiveBoard from '@/components/floor-live-board';
 import {getFloorBoard} from '@/server/floor-operations';
-import {staffContext} from '@/server/staff-context';
+import {staffPageContext} from '@/server/staff-context';
 
 export const dynamic='force-dynamic';
 function plusDays(date:string,days:number){const value=new Date(`${date}T12:00:00+05:30`);value.setDate(value.getDate()+days);return value.toLocaleDateString('en-CA',{timeZone:'Asia/Kolkata'});}
 export default async function ReservationCalendar({searchParams}:{searchParams:Promise<{date?:string;view?:string;endDate?:string}>}){
-  const context=await staffContext(['HOST','MANAGER','OWNER']);const query=await searchParams;
+  const context=await staffPageContext(['HOST','MANAGER','OWNER']);const query=await searchParams;
   const date=query.date??new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Kolkata'});const view=query.view==='week'?'week':'day';
   const endDate=view==='week'?(query.endDate??plusDays(date,6)):date;
   const board=await getFloorBoard(context.restaurantId,undefined,date,endDate);

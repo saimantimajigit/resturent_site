@@ -44,6 +44,13 @@ export async function allowRegistrationAttempt(request:Request){
  return consume(key,5);
 }
 
+export async function allowQrRequest(request:Request,operation:string,identity:string,ipLimit=60,identityLimit=30){
+ const ipKey=digest(`qr:${operation}:ip:${address(request)}`);
+ const identityKey=digest(`qr:${operation}:identity:${identity}`);
+ const [ipAllowed,identityAllowed]=await Promise.all([consume(ipKey,ipLimit),consume(identityKey,identityLimit)]);
+ return ipAllowed&&identityAllowed;
+}
+
 export function rateLimitedResponse(){
  return Response.json({error:{code:'RATE_LIMITED',message:'Too many attempts. Try again in 15 minutes.'}},{status:429,headers:{'Retry-After':String(WINDOW_MINUTES*60)}});
 }

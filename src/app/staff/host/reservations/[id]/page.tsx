@@ -1,12 +1,12 @@
 import {notFound} from 'next/navigation';
 import {db} from '@/server/db';
-import {staffContext} from '@/server/staff-context';
+import {staffPageContext} from '@/server/staff-context';
 import {getFloorBoard} from '@/server/floor-operations';
 import {ReservationEditForm,ReservationStatusActions} from '@/components/floor-actions';
 
 export const dynamic='force-dynamic';
 export default async function ReservationManagement({params}:{params:Promise<{id:string}>}){
-  const context=await staffContext(['HOST','MANAGER','OWNER']);const {id}=await params;
+  const context=await staffPageContext(['HOST','MANAGER','OWNER']);const {id}=await params;
   const reservation=await db.reservation.findFirst({where:{id,restaurantId:context.restaurantId},include:{guestProfileRef:true,ReservationTable_reservationId:{include:{diningTableRef:true}}}});
   if(!reservation)notFound();
   const board=await getFloorBoard(context.restaurantId);

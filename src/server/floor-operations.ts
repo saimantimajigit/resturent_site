@@ -180,19 +180,22 @@ export async function transitionWaitlist(args:{restaurantId:string;entryId:strin
   });
 }
 
-export async function setAssistanceStatus(args:{restaurantId:string;requestId:string;target:'ACKNOWLEDGED'|'COMPLETED'|'CANCELLED';waiterMembershipId?:string}){
-  const current=await db.assistanceRequest.findFirst({where:{id:args.requestId,restaurantId:args.restaurantId},select:{status:true}});
-  if(!current)throw new FloorOperationError('ASSISTANCE_NOT_FOUND','Service request not found.');
-  if(args.waiterMembershipId){
-    const assignments=await db.reservationTable.findMany({where:{restaurantId:args.restaurantId,diningTableId:(await db.assistanceRequest.findUniqueOrThrow({where:{id:args.requestId},select:{diningTableId:true}})).diningTableId,waiterMembershipId:args.waiterMembershipId},select:{id:true}});
-    const active=assignments.length?await db.tableOccupancy.findFirst({where:{restaurantId:args.restaurantId,reservationTableId:{in:assignments.map(row=>row.id)},active:true,startsAt:{lte:new Date()},endsAt:{gt:new Date()}},select:{id:true}}):null;
-    if(!active)throw new FloorOperationError('NOT_ASSIGNED','Waiters can only manage requests for their currently assigned tables.');
-  }
-  const allowed:Record<string,string[]>={OPEN:['ACKNOWLEDGED','COMPLETED','CANCELLED'],ACKNOWLEDGED:['COMPLETED','CANCELLED']};
-  if(!allowed[current.status]?.includes(args.target))throw new FloorOperationError('ASSISTANCE_TRANSITION','That service request is already closed.');
-  const updated=await db.assistanceRequest.updateMany({where:{id:args.requestId,restaurantId:args.restaurantId,status:current.status},data:{status:args.target,completedAt:args.target==='COMPLETED'||args.target==='CANCELLED'?new Date():null}});
-  if(updated.count!==1)throw new FloorOperationError('ASSISTANCE_TRANSITION','The service request changed; refresh and try again.');
-  return {id:args.requestId,status:args.target};
+export async function setAssistanceStatus(args:{restaurantId:string;requestId:string;actorUserId:string;target:'ACKNOWLEDGED'|'COMPLETED'|'CANCELLED';waiterMembershipId?:string}){
+  return db.$transaction(async tx=>{
+    const current=await tx.assistanceRequest.findFirst({where:{id:args.requestId,restaurantId:args.restaurantId},select:{status:true,diningTableId:true,diningSessionId:true,type:true}});
+    if(!current)throw new FloorOperationError('ASSISTANCE_NOT_FOUND','Service request not found.');
+    if(args.waiterMembershipId){
+      const assignments=await tx.reservationTable.findMany({where:{restaurantId:args.restaurantId,diningTableId:current.diningTableId,waiterMembershipId:args.waiterMembershipId},select:{id:true}});
+      const active=assignments.length?await tx.tableOccupancy.findFirst({where:{restaurantId:args.restaurantId,reservationTableId:{in:assignments.map(row=>row.id)},active:true,startsAt:{lte:new Date()},endsAt:{gt:new Date()}},select:{id:true}}):null;
+      if(!active)throw new FloorOperationError('NOT_ASSIGNED','Waiters can only manage requests for their currently assigned tables.');
+    }
+    const allowed:Record<string,string[]>={OPEN:['ACKNOWLEDGED','COMPLETED','CANCELLED'],ACKNOWLEDGED:['COMPLETED','CANCELLED']};
+    if(!allowed[current.status]?.includes(args.target))throw new FloorOperationError('ASSISTANCE_TRANSITION','That service request is already closed.');
+    const updated=await tx.assistanceRequest.updateMany({where:{id:args.requestId,restaurantId:args.restaurantId,status:current.status},data:{status:args.target,completedAt:args.target==='COMPLETED'||args.target==='CANCELLED'?new Date():null}});
+    if(updated.count!==1)throw new FloorOperationError('ASSISTANCE_TRANSITION','The service request changed; refresh and try again.');
+    if(current.diningSessionId)await tx.diningSessionEvent.create({data:{diningSessionId:current.diningSessionId,actorUserId:args.actorUserId,event:'ASSISTANCE_STATUS_CHANGED',metadata:{assistanceRequestId:args.requestId,type:current.type,status:args.target}}});
+    return {id:args.requestId,status:args.target};
+  });
 }
 
 export function floorPolicyError(error:unknown){if(error instanceof BookingRuleError)return new FloorOperationError(error.code,error.message);return error}
@@ -246,7 +249,7 @@ export async function getFloorBoard(restaurantId:string,waiterMembershipId?:stri
     date,now:now.toISOString(),tables:tableRows,
     reservations:scopedReservations.map(row=>({id:row.id,reference:row.reference,guest:row.guestProfileRef.name,email:row.guestProfileRef.email,phone:row.guestProfileRef.phone,vip:row.guestProfileRef.vip,partySize:row.partySize,status:row.status,startsAt:row.startsAt.toISOString(),endsAt:row.endsAt.toISOString(),notes:row.notes,tables:row.ReservationTable_reservationId.filter(assignment=>!waiterMembershipId||activeAssignmentIds.has(assignment.id)).map(assignment=>({id:assignment.diningTableRef.id,label:assignment.diningTableRef.label,waiterMembershipId:assignment.waiterMembershipId,waiter:assignment.waiterMembershipRef?.userRef.name??null}))})),
     waitlist:waiterMembershipId?[]:waitlist.map(row=>({id:row.id,guest:row.guestProfileRef.name,email:row.guestProfileRef.email,phone:row.guestProfileRef.phone,partySize:row.partySize,status:row.status,createdAt:row.createdAt.toISOString(),calledAt:row.calledAt?.toISOString()??null,quotedMinutes:row.quotedMinutes})),
-    assistance:scopedAssistance.map(row=>({id:row.id,tableId:row.diningTableId,table:row.diningTableRef.label,type:row.type,status:row.status,createdAt:row.createdAt.toISOString()})),
+    assistance:scopedAssistance.map(row=>({id:row.id,tableId:row.diningTableId,table:row.diningTableRef.label,type:row.type,requestType:(row.metadata as {requestType?:string}|null)?.requestType??row.type,status:row.status,createdAt:row.createdAt.toISOString()})),
     orders:scopedOrders.map(row=>({id:row.id,reference:row.reference,status:row.status,createdAt:row.createdAt.toISOString(),reservationId:row.reservationId,table:row.reservationRef?.ReservationTable_reservationId.map(assignment=>assignment.diningTableRef.label).join(', ')??'',waiter:row.reservationRef?.ReservationTable_reservationId.find(assignment=>assignment.waiterMembershipId)?.waiterMembershipRef?.userRef.name??null,kitchen:row.KitchenTicket_orderId[0]?.status??'NEW',station:row.KitchenTicket_orderId[0]?.station??'MAIN'})),
     waiters:waiterMembershipId?[]:waiters.map(row=>({id:row.id,name:row.userRef.name})),
     lateArrivals:scopedReservations.filter(row=>row.status==='CONFIRMED'&&row.startsAt.getTime()<now.getTime()-15*60_000).map(row=>({id:row.id,reference:row.reference,guest:row.guestProfileRef.name,startsAt:row.startsAt.toISOString()}))

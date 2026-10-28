@@ -106,6 +106,12 @@ enum AssistanceStatus {
   CANCELLED
 }
 
+enum DiningSessionStatus {
+  ACTIVE
+  CLOSED
+  EXPIRED
+}
+
 model User {
   id String @id @default(uuid()) @db.Uuid
   email String? @unique
@@ -120,6 +126,10 @@ model User {
   StaffMembership_userId StaffMembership[] @relation("StaffMembership_userId")
 
   ReservationEvent_actorUserId ReservationEvent[] @relation("ReservationEvent_actorUserId")
+
+  DiningSession_activatedByUserId DiningSession[] @relation("DiningSession_activatedByUserId")
+
+  DiningSessionEvent_actorUserId DiningSessionEvent[] @relation("DiningSessionEvent_actorUserId")
   WaitlistEvent_actorUserId WaitlistEvent[] @relation("WaitlistEvent_actorUserId")
 
   OrderEvent_actorUserId OrderEvent[] @relation("OrderEvent_actorUserId")
@@ -286,6 +296,8 @@ model Restaurant {
 
   AssistanceRequest_restaurantId AssistanceRequest[] @relation("AssistanceRequest_restaurantId")
 
+  DiningSession_restaurantId DiningSession[] @relation("DiningSession_restaurantId")
+
   ContentPage_restaurantId ContentPage[] @relation("ContentPage_restaurantId")
 
   GalleryItem_restaurantId GalleryItem[] @relation("GalleryItem_restaurantId")
@@ -361,6 +373,8 @@ model DiningTable {
   TableToken_diningTableId TableToken[] @relation("TableToken_diningTableId")
 
   AssistanceRequest_diningTableId AssistanceRequest[] @relation("AssistanceRequest_diningTableId")
+
+  DiningSession_diningTableId DiningSession[] @relation("DiningSession_diningTableId")
 }
 
 model TableCombination {
@@ -449,6 +463,8 @@ model Reservation {
   WaitlistEntry_reservationId WaitlistEntry? @relation("WaitlistEntry_reservationId")
 
   Order_reservationId Order[] @relation("Order_reservationId")
+
+  DiningSession_reservationId DiningSession[] @relation("DiningSession_reservationId")
 
   Payment_reservationId Payment[] @relation("Payment_reservationId")
 }
@@ -706,6 +722,7 @@ model Order {
   restaurantId String @db.Uuid
   guestProfileId String @db.Uuid
   reservationId String? @db.Uuid
+  diningSessionId String? @db.Uuid
   reference String @unique
   idempotencyKey String?
   type OrderType
@@ -718,6 +735,7 @@ model Order {
   updatedAt DateTime @updatedAt
   @@index([restaurantId])
   @@index([restaurantId, createdAt])
+  @@index([diningSessionId])
   @@unique([guestProfileId, idempotencyKey])
 
   restaurantRef Restaurant @relation("Order_restaurantId", fields: [restaurantId], references: [id], onDelete: Restrict)
@@ -725,6 +743,8 @@ model Order {
   guestProfileRef GuestProfile @relation("Order_guestProfileId", fields: [guestProfileId], references: [id], onDelete: Restrict)
 
   reservationRef Reservation? @relation("Order_reservationId", fields: [reservationId], references: [id], onDelete: Restrict)
+
+  diningSessionRef DiningSession? @relation("Order_diningSessionId", fields: [diningSessionId], references: [id], onDelete: Restrict)
 
   OrderItem_orderId OrderItem[] @relation("OrderItem_orderId")
 
@@ -860,15 +880,88 @@ model AssistanceRequest {
   id String @id @default(uuid()) @db.Uuid
   restaurantId String @db.Uuid
   diningTableId String @db.Uuid
+  diningSessionId String? @db.Uuid
+  diningGuestTokenId String? @db.Uuid
   type AssistanceType
   status AssistanceStatus @default(OPEN)
+  metadata Json?
   createdAt DateTime @default(now())
   completedAt DateTime?
   @@index([restaurantId])
+  @@index([diningSessionId])
 
   restaurantRef Restaurant @relation("AssistanceRequest_restaurantId", fields: [restaurantId], references: [id], onDelete: Restrict)
 
   diningTableRef DiningTable @relation("AssistanceRequest_diningTableId", fields: [diningTableId], references: [id], onDelete: Restrict)
+
+  diningSessionRef DiningSession? @relation("AssistanceRequest_diningSessionId", fields: [diningSessionId], references: [id], onDelete: Restrict)
+
+  diningGuestTokenRef DiningGuestToken? @relation("AssistanceRequest_diningGuestTokenId", fields: [diningGuestTokenId], references: [id], onDelete: Restrict)
+}
+
+model DiningSession {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  restaurantId String @db.Uuid
+  diningTableId String @db.Uuid
+  reservationId String @db.Uuid
+  status DiningSessionStatus @default(ACTIVE)
+  activatedByUserId String @db.Uuid
+  activatedAt DateTime @default(now())
+  expiresAt DateTime
+  closedAt DateTime?
+  @@index([restaurantId, status, expiresAt])
+  @@index([diningTableId, status])
+  @@index([reservationId, status])
+
+  restaurantRef Restaurant @relation("DiningSession_restaurantId", fields: [restaurantId], references: [id], onDelete: Restrict)
+
+  diningTableRef DiningTable @relation("DiningSession_diningTableId", fields: [diningTableId], references: [id], onDelete: Restrict)
+
+  reservationRef Reservation @relation("DiningSession_reservationId", fields: [reservationId], references: [id], onDelete: Restrict)
+
+  activatedByUserRef User @relation("DiningSession_activatedByUserId", fields: [activatedByUserId], references: [id], onDelete: Restrict)
+
+  guestTokens DiningGuestToken[] @relation("DiningGuestToken_diningSessionId")
+
+  orders Order[] @relation("Order_diningSessionId")
+
+  assistanceRequests AssistanceRequest[] @relation("AssistanceRequest_diningSessionId")
+
+  events DiningSessionEvent[] @relation("DiningSessionEvent_diningSessionId")
+}
+
+model DiningGuestToken {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  diningSessionId String @db.Uuid
+  tokenHash String @unique
+  issuedAt DateTime @default(now())
+  expiresAt DateTime
+  revokedAt DateTime?
+  lastUsedAt DateTime?
+  @@index([diningSessionId, expiresAt])
+
+  diningSessionRef DiningSession @relation("DiningGuestToken_diningSessionId", fields: [diningSessionId], references: [id], onDelete: Restrict)
+
+  assistanceRequests AssistanceRequest[] @relation("AssistanceRequest_diningGuestTokenId")
+
+  events DiningSessionEvent[] @relation("DiningSessionEvent_diningGuestTokenId")
+}
+
+model DiningSessionEvent {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  diningSessionId String @db.Uuid
+  actorUserId String? @db.Uuid
+  diningGuestTokenId String? @db.Uuid
+  event String
+  metadata Json?
+  createdAt DateTime @default(now())
+  @@index([diningSessionId, createdAt])
+
+  diningSessionRef DiningSession @relation("DiningSessionEvent_diningSessionId", fields: [diningSessionId], references: [id], onDelete: Restrict)
+
+  actorUserRef User? @relation("DiningSessionEvent_actorUserId", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  diningGuestTokenRef DiningGuestToken? @relation("DiningSessionEvent_diningGuestTokenId", fields: [diningGuestTokenId], references: [id], onDelete: Restrict)
 }
 
 model ContentPage {

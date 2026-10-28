@@ -34,7 +34,9 @@ async function postBooking(date:string,time:string,tag:string){
  return request('/api/v1/reservations',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date,time,partySize:4,name:`Concurrency ${tag}`,email:`phase101.${run}.${tag}@example.test`,notes:'Phase 10.1 concurrency verification'})});
 }
 async function findEmptyConcurrencyDate(restaurantId:string){
- for(let days=45;days<=85;days++){
+ const policy=await db.bookingPolicy.findUnique({where:{restaurantId},select:{advanceDays:true}});
+ const lastAllowedDay=Math.max(1,(policy?.advanceDays??60)-1);
+ for(let days=1;days<=lastAllowedDay;days++){
   const date=dateInKolkata(days),start=new Date(`${date}T18:00:00+05:30`),end=new Date(start.getTime()+2*60*60_000);
   const occupied=await db.tableOccupancy.count({where:{restaurantId,active:true,startsAt:{lt:end},endsAt:{gt:start}}});
   if(occupied===0)return date;

@@ -15,6 +15,6 @@ export async function POST(request:Request){
  const rejected=rejectCrossOrigin(request);if(rejected)return rejected;
  const customer=await currentCustomer();if(!customer)return NextResponse.json({error:{message:'Sign in before placing an order.'}},{status:401});
  const key=request.headers.get('idempotency-key')?.trim();if(!key||key.length<16||key.length>128)return NextResponse.json({error:{message:'A valid Idempotency-Key is required.'}},{status:400});
- try{const body=input.parse(await request.json());const order=await createCustomerOrder(customer.guest.id,process.env.RESTAURANT_ID!,key,body.items,body.reservationId);return NextResponse.json({data:{id:order.id,reference:order.reference,status:order.status,type:order.type}},{status:201});}
+ try{const body=input.parse(await request.json());const order=await createCustomerOrder(customer.guest.id,process.env.RESTAURANT_ID!,key,body.items,body.reservationId?{reservationId:body.reservationId}:{});return NextResponse.json({data:{id:order.id,reference:order.reference,status:order.status,type:order.type}},{status:201});}
  catch(error){if(error instanceof ZodError||error instanceof OrderInputError)return NextResponse.json({error:{message:'Please review the order details.'}},{status:400});if(error instanceof OrderUnavailableError)return NextResponse.json({error:{message:error.message}},{status:409});console.error('customer order creation failed',error);return NextResponse.json({error:{message:'The order could not be placed.'}},{status:500});}
 }
