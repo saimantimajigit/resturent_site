@@ -102,8 +102,26 @@ async function main(){
   const unknownOrder=await request(`/api/v1/qr/orders/${order.id}`,{},assistGuest);await status(unknownOrder,200);
   pass('waiter service board receives a session-scoped guest water request');
 
-  for(let i=1;i<8;i++)await request('/api/v1/qr/assistance',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'WATER'})},assistGuest);
-  const limited=await request('/api/v1/qr/assistance',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'WATER'})},assistGuest);await status(limited,429);pass('live QR assistance rate limit returns HTTP 429');
+  const rawAssistGuest=assistGuest.slice('savore_qr_access='.length),assistTokenRow=await db.diningGuestToken.findUniqueOrThrow({where:{tokenHash:digest(rawAssistGuest)},select:{id:true}});
+  const assistanceDuplicate=await request('/api/v1/qr/assistance',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'WATER'})},assistGuest);await status(assistanceDuplicate,409);
+  const openWaterCount=await db.assistanceRequest.count({where:{diningGuestTokenId:assistTokenRow.id,type:'WATER',status:'OPEN'}});assert.equal(openWaterCount,1);
+  const duplicateLimit=await db.authRateLimit.findUniqueOrThrow({where:{key:digest(`qr:assistance:identity:${assistTokenRow.id}`)}});assert.equal(duplicateLimit.attempts,2);
+  pass('duplicate open assistance returns HTTP 409, is counted, and leaves one active request');
+
+  // Isolate rate limiting from duplicate suppression: each invalid-body attempt must
+  // consume the authenticated guest-token bucket before schema validation. Varying
+  // client-supplied table IDs must not select a different bucket.
+  const rateIp=`203.0.113.${1+randomBytes(1)[0]%254}`;
+  const rateClaim=await request('/api/v1/qr/claim',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})});await status(rateClaim,200);
+  const rateGuest=cookie(rateClaim,'savore_qr_access');
+  for(let i=0;i<8;i++){
+   const invalid=await fetch(`${base}/api/v1/qr/assistance`,{method:'POST',headers:{...headers(rateGuest),'X-Real-IP':rateIp,'Content-Type':'application/json'},body:JSON.stringify({type:'WATER',tableId:walkIns[i%walkIns.length].tableId})});
+   await status(invalid,400);
+  }
+  const limited=await fetch(`${base}/api/v1/qr/assistance`,{method:'POST',headers:{...headers(rateGuest),'X-Real-IP':rateIp,'Content-Type':'application/json'},body:JSON.stringify({type:'WATER'})});await status(limited,429);
+  const rawRateGuest=rateGuest.slice('savore_qr_access='.length),rateGuestRow=await db.diningGuestToken.findUniqueOrThrow({where:{tokenHash:digest(rawRateGuest)},select:{id:true}});
+  const rateCounter=await db.authRateLimit.findUniqueOrThrow({where:{key:digest(`qr:assistance:identity:${rateGuestRow.id}`)}});assert.equal(rateCounter.attempts,9);
+  pass('live QR assistance rate limit counts rejected requests by authenticated guest and returns HTTP 429 on attempt nine');
 
   const accepted=await request(`/api/v1/staff/orders/${order.id}/status`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'ACCEPTED'})},manager.cookie);await status(accepted,200);
   for(const next of ['PREPARING','READY']){const update=await request(`/api/v1/staff/orders/${order.id}/status`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:next})},chef.cookie);await status(update,200)}
@@ -117,6 +135,9 @@ async function main(){
   const revokedClaim=await request('/api/v1/qr/claim',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})});await status(revokedClaim,200);const revokedCookie=cookie(revokedClaim,'savore_qr_access');
   const revokedHash=digest(revokedCookie.slice('savore_qr_access='.length));await db.diningGuestToken.update({where:{tokenHash:revokedHash},data:{revokedAt:new Date()}});
   const revokedMenu=await request('/api/v1/qr/menu',{},revokedCookie);await status(revokedMenu,401);pass('revoked guest tokens cannot access the QR menu');
+
+  const resolvedAssistance=await request(`/api/v1/staff/service/assistance/${requestRow.id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'COMPLETED'})},host.cookie);await status(resolvedAssistance,200);
+  assert.equal((await db.assistanceRequest.findUniqueOrThrow({where:{id:requestRow.id}})).status,'COMPLETED');
 
   const ended=await staffAction(host.cookie,walkIns[0].tableId,'END_SESSION',activate.data.data.id);await status(ended.response,200);
   const closedMenu=await request('/api/v1/qr/menu',{},guest);await status(closedMenu,401);
