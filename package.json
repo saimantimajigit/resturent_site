@@ -12,6 +12,7 @@
     "test": "node --experimental-strip-types --test tests/*.test.mjs",
     "test:integration": "tsx scripts/phase101-integration.ts",
     "test:orders": "tsx scripts/phase111-integration.ts",
+    "test:floor": "tsx scripts/phase112-integration.ts",
     "validate:contracts": "python3 scripts/check_contracts.py"
   },
   "dependencies": {

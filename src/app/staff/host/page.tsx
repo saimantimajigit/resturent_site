@@ -1,2 +1,10 @@
-import {db} from '@/server/db';import {requireRole} from '@/server/session';import StatusAction from './status-action';
-export default async function Host(){await requireRole(['HOST','MANAGER','OWNER']);const rows=await db.reservation.findMany({where:{restaurantId:process.env.RESTAURANT_ID,startsAt:{gte:new Date()},status:{notIn:['CANCELLED','EXPIRED','NO_SHOW']}},include:{guestProfileRef:true,ReservationTable_reservationId:{include:{diningTableRef:true}}},orderBy:{startsAt:'asc'},take:50});return <main className="layout"><p className="eyebrow">Front of house</p><h1>Reservation Calendar</h1><div className="stack">{rows.map(r=><div className="card" key={r.id}><strong>{r.reference}</strong> · {r.guestProfileRef.name} · {r.partySize} guests<p>{r.startsAt.toLocaleString('en-IN',{timeZone:'Asia/Kolkata'})} · {r.status} · {r.ReservationTable_reservationId[0]?.diningTableRef.label??'Unassigned'}</p><StatusAction id={r.id} status={r.status}/></div>)}</div></main>}
+import {getFloorBoard} from '@/server/floor-operations';
+import {staffContext} from '@/server/staff-context';
+import FloorLiveBoard from '@/components/floor-live-board';
+
+export const dynamic='force-dynamic';
+export default async function HostDashboard(){
+  const context=await staffContext(['HOST','MANAGER','OWNER']);
+  const board=await getFloorBoard(context.restaurantId);
+  return <main className="layout"><p className="eyebrow">Front of house</p><h1>Host dashboard</h1><p className="muted">Today’s arrivals, floor occupancy, and service alerts.</p><FloorLiveBoard initial={board} mode="dashboard"/></main>;
+}

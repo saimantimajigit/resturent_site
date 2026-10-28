@@ -120,6 +120,7 @@ model User {
   StaffMembership_userId StaffMembership[] @relation("StaffMembership_userId")
 
   ReservationEvent_actorUserId ReservationEvent[] @relation("ReservationEvent_actorUserId")
+  WaitlistEvent_actorUserId WaitlistEvent[] @relation("WaitlistEvent_actorUserId")
 
   OrderEvent_actorUserId OrderEvent[] @relation("OrderEvent_actorUserId")
 
@@ -189,6 +190,8 @@ model StaffMembership {
   restaurantRef Restaurant @relation("StaffMembership_restaurantId", fields: [restaurantId], references: [id], onDelete: Restrict)
 
   StaffRole_staffMembershipId StaffRole[] @relation("StaffRole_staffMembershipId")
+
+  ReservationTable_waiterMembershipId ReservationTable[] @relation("ReservationTable_waiterMembershipId")
 }
 
 model StaffRole {
@@ -443,6 +446,8 @@ model Reservation {
 
   GuestManageToken_reservationId GuestManageToken[] @relation("GuestManageToken_reservationId")
 
+  WaitlistEntry_reservationId WaitlistEntry? @relation("WaitlistEntry_reservationId")
+
   Order_reservationId Order[] @relation("Order_reservationId")
 
   Payment_reservationId Payment[] @relation("Payment_reservationId")
@@ -453,6 +458,7 @@ model ReservationTable {
   restaurantId String @db.Uuid
   reservationId String @db.Uuid
   diningTableId String @db.Uuid
+  waiterMembershipId String? @db.Uuid
   startsAt DateTime
   endsAt DateTime
   @@index([restaurantId])
@@ -462,6 +468,10 @@ model ReservationTable {
   reservationRef Reservation @relation("ReservationTable_reservationId", fields: [reservationId], references: [id], onDelete: Restrict)
 
   diningTableRef DiningTable @relation("ReservationTable_diningTableId", fields: [diningTableId], references: [id], onDelete: Restrict)
+
+  waiterMembershipRef StaffMembership? @relation("ReservationTable_waiterMembershipId", fields: [waiterMembershipId], references: [id], onDelete: Restrict)
+
+  tableOccupancyRef TableOccupancy? @relation("TableOccupancy_reservationTableId")
 }
 
 model TableOccupancy {
@@ -478,6 +488,8 @@ model TableOccupancy {
   restaurantRef Restaurant @relation("TableOccupancy_restaurantId", fields: [restaurantId], references: [id], onDelete: Restrict)
 
   diningTableRef DiningTable @relation("TableOccupancy_diningTableId", fields: [diningTableId], references: [id], onDelete: Restrict)
+
+  reservationTableRef ReservationTable @relation("TableOccupancy_reservationTableId", fields: [reservationTableId], references: [id], onDelete: Restrict)
 }
 
 model ReservationHold {
@@ -519,6 +531,9 @@ model WaitlistEntry {
   status WaitlistStatus @default(WAITING)
   createdAt DateTime @default(now())
   quotedMinutes Int?
+  calledAt DateTime?
+  seatedAt DateTime?
+  reservationId String? @unique @db.Uuid
   @@index([restaurantId])
 
   restaurantRef Restaurant @relation("WaitlistEntry_restaurantId", fields: [restaurantId], references: [id], onDelete: Restrict)
@@ -526,15 +541,21 @@ model WaitlistEntry {
   guestProfileRef GuestProfile @relation("WaitlistEntry_guestProfileId", fields: [guestProfileId], references: [id], onDelete: Restrict)
 
   WaitlistEvent_waitlistEntryId WaitlistEvent[] @relation("WaitlistEvent_waitlistEntryId")
+
+  reservationRef Reservation? @relation("WaitlistEntry_reservationId", fields: [reservationId], references: [id], onDelete: Restrict)
 }
 
 model WaitlistEvent {
   id String @id @default(uuid()) @db.Uuid
   waitlistEntryId String @db.Uuid
+  actorUserId String? @db.Uuid
   status String
+  metadata Json?
   createdAt DateTime @default(now())
 
   waitlistEntryRef WaitlistEntry @relation("WaitlistEvent_waitlistEntryId", fields: [waitlistEntryId], references: [id], onDelete: Restrict)
+
+  actorUserRef User? @relation("WaitlistEvent_actorUserId", fields: [actorUserId], references: [id], onDelete: Restrict)
 }
 
 model Menu {

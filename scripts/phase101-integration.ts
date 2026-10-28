@@ -121,12 +121,12 @@ try{
  const hostLogin=await fetch(`${base}/api/v1/auth/login`,{method:'POST',headers:{...headers(),'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({email:'host@savore.example.test',password:process.env.DEMO_HOST_PASSWORD!}),redirect:'manual'});
  assert.equal(hostLogin.status,303);
  const hostCookie=sessionCookie(hostLogin);
- const dashboard=await fetch(`${base}/staff/host`,{headers:headers(hostCookie)});
- assert.equal(dashboard.status,200);assert.match(await dashboard.text(),new RegExp(bookingData.reference));
+ const calendar=await fetch(`${base}/staff/host/calendar?date=${reservationDate}&view=day`,{headers:headers(hostCookie)});
+ assert.equal(calendar.status,200);assert.match(await calendar.text(),new RegExp(bookingData.reference));
  const statusUpdate=await fetch(`${base}/api/v1/staff/reservations/${bookingData.id}/status`,{method:'POST',headers:{...headers(hostCookie),'Content-Type':'application/json'},body:JSON.stringify({status:'ARRIVED'})});
  assert.equal(statusUpdate.status,200,await statusUpdate.text());
  assert.equal((await db.reservation.findUnique({where:{id:bookingData.id}}))?.status,'ARRIVED');
- pass('host dashboard shows the reservation and host status update persists');
+ pass('host calendar shows the future reservation and host status update persists');
 
  const limitedEmail=`ratelimit.${run}@example.test`;
  const rateStatuses:number[]=[];
