@@ -1,0 +1,9 @@
+'use client';
+import {useState,type FormEvent} from 'react';
+
+const dietaryOptions=['Vegetarian','Vegan','Pescatarian','Gluten-free','Dairy-free'];
+export default function ProfileForm({name,phone,preferences}:{name:string;phone:string;preferences:string[]}){
+ const [notice,setNotice]=useState('');const [busy,setBusy]=useState(false);
+ async function submit(event:FormEvent<HTMLFormElement>){event.preventDefault();setNotice('');setBusy(true);const form=new FormData(event.currentTarget);try{const response=await fetch('/api/v1/customer/profile',{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({name:form.get('name'),phone:form.get('phone'),dietary:form.getAll('dietary')})});const result=await response.json();if(!response.ok)throw new Error(result.error?.message||'Could not save changes.');setNotice('Your preferences have been saved.');}catch(error){setNotice(error instanceof Error?error.message:'Could not save changes.');}finally{setBusy(false);}}
+ return <form className="profile-form" onSubmit={submit}><label className="field"><span>Name</span><input name="name" defaultValue={name} required minLength={2} maxLength={100}/></label><label className="field"><span>Phone</span><input type="tel" name="phone" defaultValue={phone} maxLength={30}/></label><fieldset className="preferences"><legend>Dining preferences</legend><p className="muted">We’ll share these with the team to make your visit more comfortable.</p>{dietaryOptions.map(option=><label key={option}><input type="checkbox" name="dietary" value={option} defaultChecked={preferences.includes(option)}/><span>{option}</span></label>)}</fieldset>{notice?<p className="form-hint" role="status">{notice}</p>:null}<button className="button button-forest" disabled={busy}>{busy?'Saving…':'Save changes'}</button></form>;
+}

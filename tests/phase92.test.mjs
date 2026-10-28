@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 const read=(path)=>readFileSync(path,'utf8');
 test('booking confirmation does not falsely claim table number',()=>{
  const ui=read('src/app/reservations/booking-form.tsx');
- assert.match(ui,/Confirmed: \${v\.data\.reference}/);
+ assert.match(ui,/confirmation\.reference/);
  assert.doesNotMatch(ui,/v\.data\.table/);
 });
 test('host actions call non-redirecting authorization',()=>{

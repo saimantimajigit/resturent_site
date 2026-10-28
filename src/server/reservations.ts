@@ -3,6 +3,7 @@ import {db} from './db';
 import {z} from 'zod';
 import {randomUUID} from 'node:crypto';
 import {assertBookingAllowed,BookingRuleError} from './booking-policy';
+import {currentCustomer} from './customer';
 export {BookingRuleError} from './booking-policy';
 type BookingInput = {
  date: string;
@@ -38,6 +39,7 @@ export async function slots(date:string,partySize:number){
 }
 export async function createBooking(data:BookingInput){
  const parsed=bookingInput.parse(data) as BookingInput,restaurantId=rid();
+ const customer=await currentCustomer();
  // Read-only availability is advisory; policy and table allocation are rechecked inside transaction.
  return db.$transaction(async(tx)=>{
   const [policy,periods,closures]=await Promise.all([
@@ -51,7 +53,9 @@ export async function createBooking(data:BookingInput){
    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${table.id}::text))`;
    const count=await tx.tableOccupancy.count({where:{diningTableId:table.id,active:true,startsAt:{lt:end},endsAt:{gt:start}}});
    if(count)continue;
-   const guest=await tx.guestProfile.create({data:{name:parsed.name,email:parsed.email}});
+   const guest=customer
+    ? await tx.guestProfile.findUniqueOrThrow({where:{id:customer.guest.id}})
+    : await tx.guestProfile.create({data:{name:parsed.name,email:parsed.email}});
    const reservation=await tx.reservation.create({data:{restaurantId,guestProfileId:guest.id,reference:'SV-'+randomUUID().slice(0,12).toUpperCase(),partySize:parsed.partySize,startsAt:start,endsAt:end,notes:parsed.notes,status:'CONFIRMED'}});
    const assignment=await tx.reservationTable.create({data:{restaurantId,reservationId:reservation.id,diningTableId:table.id,startsAt:start,endsAt:end}});
    await tx.tableOccupancy.create({data:{restaurantId,reservationTableId:assignment.id,diningTableId:table.id,startsAt:start,endsAt:end,active:true}});

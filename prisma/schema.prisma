@@ -137,6 +137,15 @@ model Session {
   userRef User @relation("Session_userId", fields: [userId], references: [id], onDelete: Restrict)
 }
 
+model AuthRateLimit {
+  key String @id @db.VarChar(64)
+  windowStartedAt DateTime @db.Timestamptz(6)
+  attempts Int @default(0)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  @@index([updatedAt])
+}
+
 model Role {
   id String @id @default(uuid()) @db.Uuid
   code RoleCode @unique

@@ -1,0 +1,2 @@
+const links=[['/account','Overview'],['/account/reservations','My reservations'],['/account/favorites','My favorites'],['/account/profile','Profile & preferences']];
+export default function AccountNavigation({active}:{active:string}){return <nav className="account-nav" aria-label="Your account">{links.map(([href,label])=><a href={href} aria-current={href===active?'page':undefined} key={href}>{label}</a>)}<form action="/api/v1/auth/logout" method="post"><button className="button-text account-logout">Sign out</button></form></nav>;}

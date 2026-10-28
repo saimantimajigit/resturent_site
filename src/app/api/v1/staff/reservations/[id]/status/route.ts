@@ -3,9 +3,10 @@ import {z} from 'zod';
 import {changeReservationStatus} from '@/server/host-actions';
 import {AuthenticationError,AuthorizationError} from '@/server/session';
 import {ZodError} from 'zod';
+import {rejectCrossOrigin} from '@/server/request-security';
 const input=z.object({status:z.enum(['ARRIVED','SEATED','COMPLETED','CANCELLED','NO_SHOW'])});
 export async function POST(req:Request,{params}:{params:Promise<{id:string}>}){
- const origin=req.headers.get('origin');if(origin&&new URL(origin).host!==new URL(req.url).host)return NextResponse.json({error:{code:'ORIGIN_REJECTED'}},{status:403});
+ const rejected=rejectCrossOrigin(req);if(rejected)return rejected;
  try{const {id}=await params;const {status}=input.parse(await req.json());return NextResponse.json({data:await changeReservationStatus(id,status)})}
  catch(e){
   if(e instanceof AuthenticationError)return NextResponse.json({error:{code:'UNAUTHENTICATED',message:'Sign in required'}},{status:401});

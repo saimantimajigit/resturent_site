@@ -1,8 +1,9 @@
 import {NextResponse} from 'next/server';
 import {ZodError} from 'zod';
 import {bookingInput,createBooking,BookingConflict,BookingRuleError} from '@/server/reservations';
+import {rejectCrossOrigin} from '@/server/request-security';
 export async function POST(req:Request){
- const origin=req.headers.get('origin');if(origin&&new URL(origin).host!==new URL(req.url).host)return NextResponse.json({error:{code:'ORIGIN_REJECTED',message:'Invalid origin'}},{status:403});
+ const rejected=rejectCrossOrigin(req);if(rejected)return rejected;
  try{const input=bookingInput.parse(await req.json());return NextResponse.json({data:await createBooking(input)},{status:201})}
  catch(e){
   if(e instanceof ZodError)return NextResponse.json({error:{code:'VALIDATION_ERROR',message:'Invalid booking details'}},{status:400});

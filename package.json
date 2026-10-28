@@ -10,6 +10,7 @@
     "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "test": "node --experimental-strip-types --test tests/*.test.mjs",
+    "test:integration": "tsx scripts/phase101-integration.ts",
     "validate:contracts": "python3 scripts/check_contracts.py"
   },
   "dependencies": {
