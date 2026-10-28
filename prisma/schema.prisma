@@ -686,6 +686,7 @@ model Order {
   guestProfileId String @db.Uuid
   reservationId String? @db.Uuid
   reference String @unique
+  idempotencyKey String?
   type OrderType
   status OrderStatus @default(PLACED)
   subtotalMinor BigInt
@@ -696,6 +697,7 @@ model Order {
   updatedAt DateTime @updatedAt
   @@index([restaurantId])
   @@index([restaurantId, createdAt])
+  @@unique([guestProfileId, idempotencyKey])
 
   restaurantRef Restaurant @relation("Order_restaurantId", fields: [restaurantId], references: [id], onDelete: Restrict)
 
@@ -721,6 +723,7 @@ model OrderItem {
   quantity Int
   lineTotalMinor BigInt
   notes String?
+  allergenSnapshot Json?
 
   orderRef Order @relation("OrderItem_orderId", fields: [orderId], references: [id], onDelete: Restrict)
 
@@ -747,6 +750,7 @@ model OrderEvent {
   fromStatus String?
   toStatus String
   createdAt DateTime @default(now())
+  metadata Json?
 
   orderRef Order @relation("OrderEvent_orderId", fields: [orderId], references: [id], onDelete: Restrict)
 
@@ -762,6 +766,7 @@ model KitchenTicket {
   startedAt DateTime?
   completedAt DateTime?
   @@index([status, createdAt])
+  @@unique([orderId])
 
   orderRef Order @relation("KitchenTicket_orderId", fields: [orderId], references: [id], onDelete: Restrict)
 
@@ -773,6 +778,7 @@ model KitchenTicketItem {
   kitchenTicketId String @db.Uuid
   orderItemId String @db.Uuid
   status KitchenStatus @default(NEW)
+  @@unique([kitchenTicketId, orderItemId])
 
   kitchenTicketRef KitchenTicket @relation("KitchenTicketItem_kitchenTicketId", fields: [kitchenTicketId], references: [id], onDelete: Restrict)
 
@@ -813,6 +819,7 @@ model Refund {
   amountMinor BigInt
   status RefundStatus @default(REQUESTED)
   reason String
+  requestKey String? @unique
   createdAt DateTime @default(now())
 
   paymentRef Payment @relation("Refund_paymentId", fields: [paymentId], references: [id], onDelete: Restrict)

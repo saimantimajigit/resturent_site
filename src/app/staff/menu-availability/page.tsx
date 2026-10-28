@@ -1,0 +1,5 @@
+import {db} from '@/server/db';
+import {requireRole} from '@/server/session';
+import AvailabilityToggle from '@/components/availability-toggle';
+export const dynamic='force-dynamic';
+export default async function MenuAvailability(){await requireRole(['MANAGER','OWNER']);const rows=await db.menuItem.findMany({where:{menuCategoryRef:{menuRef:{restaurantId:process.env.RESTAURANT_ID}}},include:{menuCategoryRef:true,MenuAvailability_menuItemId:true},orderBy:{name:'asc'},take:200});return <main className="layout"><p className="eyebrow">Restaurant operations</p><h1>Menu availability</h1><p className="muted">Changes take effect on the customer menu and are rechecked during checkout.</p><div className="stack">{rows.map(item=><article className="card reservation-row" key={item.id}><div><strong>{item.name}</strong><p>{item.menuCategoryRef.name} · {item.MenuAvailability_menuItemId[0]?.available===false?'Unavailable':'Available'}</p></div><AvailabilityToggle id={item.id} available={item.MenuAvailability_menuItemId[0]?.available??true}/></article>)}</div></main>}

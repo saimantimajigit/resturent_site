@@ -8,9 +8,10 @@
     "start": "next start",
     "db:generate": "prisma generate",
     "db:deploy": "prisma migrate deploy",
-    "db:seed": "tsx prisma/seed.ts",
+    "db:seed": "tsx prisma/seed.ts && tsx prisma/seed-orders.ts",
     "test": "node --experimental-strip-types --test tests/*.test.mjs",
     "test:integration": "tsx scripts/phase101-integration.ts",
+    "test:orders": "tsx scripts/phase111-integration.ts",
     "validate:contracts": "python3 scripts/check_contracts.py"
   },
   "dependencies": {

@@ -1,0 +1,12 @@
+import {NextResponse} from 'next/server';
+import {z,ZodError} from 'zod';
+import {currentCustomer} from '@/server/customer';
+import {db} from '@/server/db';
+import {assertOrderTransition,OrderTransitionError,OrderUnavailableError} from '@/server/orders';
+import {rejectCrossOrigin} from '@/server/request-security';
+import {canCustomerCancelOrder} from '@/server/order-policy';
+const input=z.object({reason:z.string().trim().min(3).max(240)});
+export async function POST(request:Request,{params}:{params:Promise<{id:string}>}){
+ const rejected=rejectCrossOrigin(request);if(rejected)return rejected;const customer=await currentCustomer();if(!customer)return NextResponse.json({error:{message:'Sign in required.'}},{status:401});
+ try{const body=input.parse(await request.json());const {id}=await params;await db.$transaction(async tx=>{const order=await tx.order.findFirst({where:{id,guestProfileId:customer.guest.id,restaurantId:process.env.RESTAURANT_ID}});if(!order)throw new OrderUnavailableError('Order not found.');if(!canCustomerCancelOrder(order.status))throw new OrderTransitionError('This order has already entered preparation and can no longer be cancelled online.');assertOrderTransition(order.status,'CANCELLED');await tx.order.update({where:{id},data:{status:'CANCELLED'}});await tx.orderEvent.create({data:{orderId:id,fromStatus:order.status,toStatus:'CANCELLED',metadata:{reason:body.reason}}});await tx.kitchenTicket.updateMany({where:{orderId:id},data:{status:'CANCELLED',completedAt:new Date()}});const payment=await tx.payment.findFirst({where:{orderId:id,status:'SUCCEEDED'}});if(payment)await tx.refund.upsert({where:{requestKey:`order-cancel:${id}`},create:{paymentId:payment.id,amountMinor:payment.amountMinor,status:'REQUESTED',reason:body.reason,requestKey:`order-cancel:${id}`},update:{}});});return NextResponse.json({data:{cancelled:true,refundReviewRequired:true}});}catch(error){if(error instanceof ZodError)return NextResponse.json({error:{message:'Please provide a short cancellation reason.'}},{status:400});if(error instanceof OrderUnavailableError)return NextResponse.json({error:{message:error.message}},{status:404});if(error instanceof OrderTransitionError)return NextResponse.json({error:{message:error.message}},{status:409});console.error('customer order cancellation failed',error);return NextResponse.json({error:{message:'Could not cancel this order.'}},{status:500});}
+}

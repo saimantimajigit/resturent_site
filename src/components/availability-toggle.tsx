@@ -1,0 +1,4 @@
+'use client';
+import {useState} from 'react';
+import {useRouter} from 'next/navigation';
+export default function AvailabilityToggle({id,available}:{id:string;available:boolean}){const [busy,setBusy]=useState(false);const [error,setError]=useState('');const router=useRouter();return <div><button className="button button-small" disabled={busy} onClick={async()=>{setBusy(true);setError('');try{const response=await fetch('/api/v1/staff/menu-availability',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({menuItemId:id,available:!available,reason:!available?'Restored by manager': 'Temporarily unavailable'})});const body=await response.json();if(!response.ok)throw new Error(body.error?.message||'Update failed');router.refresh()}catch(e){setError(e instanceof Error?e.message:'Update failed')}finally{setBusy(false)}}}>{busy?'Saving…':available?'Mark unavailable':'Mark available'}</button>{error?<p role="alert">{error}</p>:null}</div>}

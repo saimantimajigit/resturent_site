@@ -1,0 +1,9 @@
+import {notFound} from 'next/navigation';
+import {db} from '@/server/db';
+import {requireRole} from '@/server/session';
+import OrderStatusAction from '@/components/order-status-action';
+export const dynamic='force-dynamic';
+export default async function KitchenTicketDetail({params}:{params:Promise<{id:string}>}){
+ await requireRole(['CHEF','MANAGER','OWNER']);const {id}=await params;const ticket=await db.kitchenTicket.findFirst({where:{id,orderRef:{restaurantId:process.env.RESTAURANT_ID}},include:{orderRef:{select:{id:true,reference:true,status:true,createdAt:true,type:true}},KitchenTicketItem_kitchenTicketId:{include:{orderItemRef:{select:{id:true,nameSnapshot:true,quantity:true,notes:true,allergenSnapshot:true}}}}}});if(!ticket)notFound();
+ return <main className="layout"><p className="eyebrow"><a href="/staff/kitchen">Kitchen queue</a> · {ticket.station}</p><h1>Ticket {ticket.orderRef.reference}</h1><p>Elapsed {Math.max(0,Math.floor((Date.now()-ticket.createdAt.getTime())/60000))} minutes · {ticket.orderRef.type.toLowerCase().replaceAll('_',' ')}</p><div className="stack">{ticket.KitchenTicketItem_kitchenTicketId.map(item=>{const allergens=Array.isArray(item.orderItemRef.allergenSnapshot)?item.orderItemRef.allergenSnapshot.map(String):[];return <article className="card" key={item.id}><h2>{item.orderItemRef.quantity} × {item.orderItemRef.nameSnapshot}</h2><p>Ticket status: {item.status.toLowerCase()}</p>{item.orderItemRef.notes?<p><strong>Guest instruction:</strong> {item.orderItemRef.notes}</p>:null}<p><strong>Allergens:</strong> {allergens.length?allergens.join(', '):'No listed allergens. Confirm dietary needs with the guest.'}</p></article>})}</div><OrderStatusAction id={ticket.orderRef.id} status={ticket.orderRef.status} options={ticket.orderRef.status==='PLACED'||ticket.orderRef.status==='ACCEPTED'?['PREPARING']:ticket.orderRef.status==='PREPARING'?['READY']:[]}/></main>;
+}
