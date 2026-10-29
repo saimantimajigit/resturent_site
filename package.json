@@ -14,6 +14,7 @@
     "test:orders": "tsx scripts/phase111-integration.ts",
     "test:floor": "tsx scripts/phase112-integration.ts",
     "test:qr-dining": "tsx scripts/phase113-integration.ts",
+    "test:admin": "tsx scripts/phase114-integration.ts",
     "validate:contracts": "python3 scripts/check_contracts.py"
   },
   "dependencies": {

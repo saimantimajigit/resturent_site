@@ -129,7 +129,7 @@ export async function getQrGuestContext(rawToken:string|undefined){
 
 export async function qrMenu(restaurantId:string){
   const rows=await db.menuItem.findMany({where:{status:'PUBLISHED',menuCategoryRef:{menuRef:{restaurantId,published:true}}},include:{menuCategoryRef:true,MenuItemPrice_menuItemId:{where:{effectiveTo:null},orderBy:{effectiveFrom:'desc'},take:1},MenuItemAllergen_menuItemId:{include:{allergenRef:true}},MenuAvailability_menuItemId:true},orderBy:[{menuCategoryRef:{sortOrder:'asc'}},{name:'asc'}],take:150});
-  return rows.map(item=>({id:item.id,slug:item.slug,name:item.name,description:item.description,category:item.menuCategoryRef.name,priceMinor:item.MenuItemPrice_menuItemId[0]?.amountMinor.toString()??null,currency:item.MenuItemPrice_menuItemId[0]?.currency??'INR',vegetarian:item.vegetarian,available:item.MenuAvailability_menuItemId[0]?.available??true,allergens:item.MenuItemAllergen_menuItemId.map(link=>link.allergenRef.name),imageUrl:item.imageUrl}));
+  return rows.map(item=>({id:item.id,slug:item.slug,name:item.name,description:item.description,category:item.menuCategoryRef.name,priceMinor:item.MenuItemPrice_menuItemId[0]?.amountMinor.toString()??null,currency:item.MenuItemPrice_menuItemId[0]?.currency??'INR',vegetarian:item.vegetarian,dietaryLabels:item.dietaryLabels,available:item.MenuAvailability_menuItemId[0]?.available??true,allergens:item.MenuItemAllergen_menuItemId.map(link=>link.allergenRef.name),imageUrl:item.imageUrl}));
 }
 
 export async function createQrAssistance(args:{guestTokenId:string;sessionId:string;restaurantId:string;tableId:string;type:'WAITER'|'WATER'|'BILL'|'CUTLERY'}){

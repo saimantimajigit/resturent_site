@@ -606,6 +606,7 @@ model MenuItem {
   description String?
   status MenuItemStatus @default(DRAFT)
   vegetarian Boolean @default(false)
+  dietaryLabels String[] @default([])
   imageUrl String?
 
   menuCategoryRef MenuCategory @relation("MenuItem_menuCategoryId", fields: [menuCategoryId], references: [id], onDelete: Restrict)

@@ -1,0 +1,2 @@
+ALTER TABLE "MenuItem"
+ADD COLUMN "dietaryLabels" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
