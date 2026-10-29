@@ -1,9 +1,13 @@
 node_modules
 .next
 .next-dev
+.next-dev-*
 .next-prod
 .npm-cache
 .env
 .env.local
+.env.*
+!.env.example
+!.env.*.example
 src/generated
 *.log
