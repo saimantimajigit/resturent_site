@@ -2,7 +2,7 @@ import 'dotenv/config';
 import assert from 'node:assert/strict';
 import {createHash,randomBytes,randomUUID} from 'node:crypto';
 import {hash} from 'bcryptjs';
-import {PrismaClient} from '../src/generated/prisma/client';
+import {Prisma,PrismaClient} from '../src/generated/prisma/client';
 import {PrismaPg} from '@prisma/adapter-pg';
 
 const db=new PrismaClient({adapter:new PrismaPg({connectionString:process.env.DATABASE_URL!})});
@@ -67,8 +67,12 @@ async function main(){
   const service=await request('/staff/service',{},waiter.cookie);assert.equal(service.status,200);assert.match(await service.text(),new RegExp(orderData.reference));pass('customer dine-in checkout links to seated booking and kitchen ticket appears on waiter service board');
   const tracking=await request(`/api/v1/customer/orders/${orderData.id}`,{},customer);assert.equal(tracking.status,200);assert.equal((await data(tracking)).data.status,'PLACED');
   const prematureCompletion=await request(`/api/v1/staff/reservations/${reservation.id}/status`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'COMPLETED'})},host);assert.equal(prematureCompletion.status,409);assert.equal((await data(prematureCompletion)).error.code,'ACTIVE_DINE_IN_ORDER');assert.equal(await db.tableOccupancy.count({where:{reservationTableId:currentAssignment.id,active:true}}),1);pass('reservation completion is blocked while its dine-in session has an open order');
-  const kitchen=await request('/staff/kitchen',{},chef.cookie);assert.equal(kitchen.status,200);assert.match(await kitchen.text(),new RegExp(orderData.reference));pass('customer tracking and chef kitchen board show the same dine-in order');
+  const kitchenWhere:Prisma.KitchenTicketWhereInput={status:{in:['NEW','PREPARING','READY']},orderRef:{restaurantId,status:{in:['PLACED','ACCEPTED','PREPARING','READY']}}};
+  const expectedKitchen=await db.kitchenTicket.findMany({where:kitchenWhere,select:{id:true},orderBy:[{createdAt:'asc'},{id:'asc'}]});assert.ok(expectedKitchen.length>100,'realistic-load pagination test requires more than one page of active tickets');
+  const renderedKitchen:string[]=[];for(let page=1;page<=Math.ceil(expectedKitchen.length/100);page++){const response=await request(`/staff/kitchen?page=${page}`,{},chef.cookie);assert.equal(response.status,200);const html=await response.text();renderedKitchen.push(...[...html.matchAll(/href="\/staff\/kitchen\/([a-f0-9-]+)"/g)].map(match=>match[1]))}
+  assert.deepEqual(renderedKitchen,expectedKitchen.map(ticket=>ticket.id));const lastKitchen=await request('/staff/kitchen?page=999999',{},chef.cookie);assert.equal(lastKitchen.status,200);assert.match(await lastKitchen.text(),new RegExp(orderData.reference));pass('FIFO kitchen pages expose new tickets beyond 100 and contain every stable-dataset ticket exactly once');
   for(const status of ['ACCEPTED','PREPARING','READY','SERVED']){const response=await request(`/api/v1/staff/orders/${orderData.id}/status`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})},manager.cookie);await expectStatus(response,200)}
+  const afterServe=await request('/staff/kitchen?page=999999',{},chef.cookie);await expectStatus(afterServe,200);assert.doesNotMatch(await afterServe.text(),new RegExp(orderData.reference));
 
   const completed=await request(`/api/v1/staff/reservations/${reservation.id}/status`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'COMPLETED'})},host);assert.equal(completed.status,200);assert.equal(await db.tableOccupancy.count({where:{reservationTableId:currentAssignment.id,active:true}}),0);pass('completed service releases database-derived occupancy');
 
@@ -86,7 +90,6 @@ async function main(){
   const walkInReservation=await db.reservation.findUniqueOrThrow({where:{id:walkInResult.id},include:{ReservationTable_reservationId:{include:{tableOccupancyRef:true}}}});assert.equal(walkInReservation.status,'SEATED');assert.ok(walkInReservation.ReservationTable_reservationId[0].tableOccupancyRef?.active);pass('walk-in registration creates an immediately seated reservation with persisted table occupancy');
   const completeWalkIn=await request(`/api/v1/staff/reservations/${walkInResult.id}/status`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'COMPLETED'})},host);await expectStatus(completeWalkIn,200);
   const noFitWalkIn=await request('/api/v1/staff/walk-ins',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:`Waitlisted ${run}`,partySize:12})},host);await expectStatus(noFitWalkIn,201);const queued=(await data(noFitWalkIn)).data;assert.equal(queued.kind,'WAITLISTED');assert.equal((await db.waitlistEntry.findUniqueOrThrow({where:{id:queued.id}})).status,'WAITING');pass('walk-in with no suitable table is added to the waitlist');
-
   const crossOrigin=await request('/api/v1/staff/walk-ins',{method:'POST',headers:{Origin:'https://attacker.invalid','Content-Type':'application/json'},body:JSON.stringify({name:'Cross origin',partySize:2})},host);assert.equal(crossOrigin.status,403);pass('cross-origin floor mutations are rejected');
 
   const hostPage=await request('/staff/host',{},host);assert.equal(hostPage.status,200);assert.match(await hostPage.text(),/Host dashboard/);

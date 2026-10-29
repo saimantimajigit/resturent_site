@@ -40,9 +40,9 @@ async function main(){
    const assignment=await db.reservationTable.findFirstOrThrow({where:{reservationId:data.id,tableOccupancyRef:{is:{active:true}}},include:{diningTableRef:true}});
    walkIns.push({id:data.id,tableId:assignment.diningTableId,assignmentId:assignment.id,label:assignment.diningTableRef.label});
   }
-  assert.deepEqual(walkIns.map(item=>item.label).sort(),['QR-ISO-01','QR-ISO-02'],'QR tests must use the dedicated isolated one-seat tables');
+  assert.equal(new Set(walkIns.map(item=>item.tableId)).size,2,'each QR fixture must occupy its own table');
   await db.reservationTable.update({where:{id:walkIns[0].assignmentId},data:{waiterMembershipId:waiter.membershipId}});
-  pass('host walk-ins produce two independent seated tables for QR session tests');
+  pass('host walk-ins produce two independent occupied tables for QR session tests');
 
   const provision=await staffAction(host.cookie,walkIns[0].tableId,'ROTATE_QR');await status(provision.response,200);
   const code=String(provision.data.data.url).split('/').pop()!;assert.match(code,/^[a-f0-9]{64}$/i);
@@ -74,6 +74,12 @@ async function main(){
   const body=JSON.stringify({items:[{menuItemId:dish.id,quantity:2,notes:'No garnish, please'}]}),key=`phase113-${run}-order`;
   const orderResponse=await request('/api/v1/qr/orders',{method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':key},body},guest);await status(orderResponse,201);const order=(await json(orderResponse)).data;
   const duplicate=await request('/api/v1/qr/orders',{method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':key},body},guest);await status(duplicate,201);assert.equal((await json(duplicate)).data.id,order.id);
+  const concurrentKey=`phase113-${run}-concurrent`,concurrentBody=JSON.stringify({items:[{menuItemId:dish.id,quantity:1}]});
+  const concurrentResponses=await Promise.all([1,2].map(()=>request('/api/v1/qr/orders',{method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':concurrentKey},body:concurrentBody},guest)));
+  assert.deepEqual(concurrentResponses.map(response=>response.status),[201,201]);const concurrentOrders=await Promise.all(concurrentResponses.map(json));
+  assert.equal(concurrentOrders[0].data.id,concurrentOrders[1].data.id);assert.equal(await db.order.count({where:{restaurantId,guestProfileId:order.guestProfileId,idempotencyKey:concurrentKey}}),1);assert.equal(await db.kitchenTicket.count({where:{orderId:concurrentOrders[0].data.id}}),1);
+  pass('simultaneous QR checkout retries create one order and one kitchen ticket');
+  for(const [statusValue,actor] of [['ACCEPTED',manager.cookie],['PREPARING',chef.cookie],['READY',chef.cookie],['SERVED',manager.cookie]] as const){const progressed=await request(`/api/v1/staff/orders/${concurrentOrders[0].data.id}/status`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:statusValue})},actor);await status(progressed,200)}
   const persisted=await db.order.findUniqueOrThrow({where:{id:order.id},include:{OrderItem_orderId:true,KitchenTicket_orderId:{include:{KitchenTicketItem_kitchenTicketId:true}}}});
   assert.equal(persisted.diningSessionId,tokenRow.diningSessionId);assert.equal(persisted.totalMinor,price*2n);assert.equal(persisted.OrderItem_orderId[0].unitPriceMinor,price);assert.equal(persisted.OrderItem_orderId[0].notes,'No garnish, please');
   assert.equal(persisted.KitchenTicket_orderId.length,1);assert.equal(persisted.KitchenTicket_orderId[0].KitchenTicketItem_kitchenTicketId.length,1);

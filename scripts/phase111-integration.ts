@@ -59,7 +59,7 @@ async function main(){
    const restore=await request('/api/v1/staff/menu-availability',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({menuItemId:dish.id,available:priorAvailability?.available??true,reason:priorAvailability?.reason??undefined})},managerCookie);await expectStatus(restore,200);
   }
   pass('checkout rejects unavailable dishes and manager availability can be restored');
-  const kds=await request('/staff/kitchen',{},chefCookie);assert.equal(kds.status,200);const kdsHtml=await kds.text();assert.match(kdsHtml,new RegExp(order.reference));assert.doesNotMatch(kdsHtml,/₹\s?\d/);
+  const kds=await request('/staff/kitchen?page=999999',{},chefCookie);assert.equal(kds.status,200);const kdsHtml=await kds.text();assert.match(kdsHtml,new RegExp(order.reference));assert.doesNotMatch(kdsHtml,/₹\s?\d/);
   const preparing=await request(`/api/v1/staff/orders/${order.id}/status`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'PREPARING'})},chefCookie);await expectStatus(preparing,200);
   const ready=await request(`/api/v1/staff/orders/${order.id}/status`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'READY'})},chefCookie);await expectStatus(ready,200);
   const chefPricing=await request(`/api/v1/staff/orders/${order.id}/status`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'ACCEPTED'})},chefCookie);assert.equal(chefPricing.status,403);
