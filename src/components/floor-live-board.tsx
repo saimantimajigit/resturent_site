@@ -1,5 +1,5 @@
 'use client';
-import {useEffect,useMemo,useState} from 'react';
+import {useEffect,useMemo,useRef,useState} from 'react';
 import {AssistanceActions,ReservationStatusActions,WaitlistActions} from './floor-actions';
 
 type TableRow={id:string;label:string;zone:string;minCapacity:number;maxCapacity:number;x:number;y:number;status:string;guest:string|null;partySize:number|null;startsAt:string|null;waiter:string|null};
@@ -12,13 +12,16 @@ const time=(value:string)=>new Date(value).toLocaleTimeString('en-IN',{timeZone:
 const dateText=(value:string)=>new Date(value).toLocaleDateString('en-IN',{timeZone:'Asia/Kolkata',weekday:'short',day:'numeric',month:'short'});
 
 export default function FloorLiveBoard({initial,mode,view='day',endDate}:{initial:Board;mode:Mode;view?:'day'|'week';endDate?:string}){
-  const [board,setBoard]=useState(initial),[selected,setSelected]=useState<TableRow|null>(null),[filter,setFilter]=useState('ALL'),[error,setError]=useState('');
+  const [board,setBoard]=useState(initial),[selected,setSelected]=useState<TableRow|null>(null),[filter,setFilter]=useState('ALL'),[error,setError]=useState(''),[announcement,setAnnouncement]=useState('');
   useEffect(()=>{const query=new URLSearchParams({date:initial.date,...(endDate?{endDate}:{})});const refresh=async()=>{try{const response=await fetch(`/api/v1/staff/floor/board?${query}`,{cache:'no-store'});if(response.ok){setBoard((await response.json()).data);setError('')}}catch{setError('Live refresh paused; reload to reconnect.')}};const timer=setInterval(refresh,15000);return()=>clearInterval(timer)},[initial.date,endDate]);
+  const liveSignature=useMemo(()=>JSON.stringify({reservations:board.reservations.map(row=>[row.id,row.status]),waitlist:board.waitlist.map(row=>[row.id,row.status]),assistance:board.assistance.map(row=>[row.id,row.status]),orders:board.orders.map(row=>[row.id,row.status,row.kitchen])}),[board]);
+  const previousSignature=useRef(liveSignature);
+  useEffect(()=>{if(previousSignature.current!==liveSignature){previousSignature.current=liveSignature;setAnnouncement('Floor and service board updated. Review the current table, waitlist, assistance, and order statuses.')}},[liveSignature]);
   const statuses=useMemo(()=>['ALL',...new Set(board.reservations.map(row=>row.status))],[board.reservations]);
   const shown=board.reservations.filter(row=>filter==='ALL'||row.status===filter);
   const count=(status:string)=>board.tables.filter(table=>table.status===status).length;
   const changeDate=(offset:number)=>{const date=new Date(`${board.date}T12:00:00+05:30`);date.setDate(date.getDate()+offset);const value=date.toLocaleDateString('en-CA',{timeZone:'Asia/Kolkata'});const end=view==='week'?(()=>{const d=new Date(`${value}T12:00:00+05:30`);d.setDate(d.getDate()+6);return d.toLocaleDateString('en-CA',{timeZone:'Asia/Kolkata'})})():value;window.location.href=`/staff/host/calendar?date=${value}&view=${view}${view==='week'?`&endDate=${end}`:''}`};
-  return <div className="floor-board"><nav className="floor-tabs" aria-label="Front of house">{links.map(([key,label,href])=><a key={key} href={href} aria-current={mode===key?'page':undefined}>{label}</a>)}</nav>{error?<p role="status" className="form-hint">{error}</p>:null}
+  return <div className="floor-board"><p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{announcement}</p><nav className="floor-tabs" aria-label="Front of house">{links.map(([key,label,href])=><a key={key} href={href} aria-current={mode===key?'page':undefined}>{label}</a>)}</nav>{error?<p role="status" className="form-hint">{error}</p>:null}
     {mode==='dashboard'?<>
       <section className="floor-metrics" aria-label="Today at a glance"><article className="card"><span>Arrivals today</span><strong>{board.reservations.filter(row=>['CONFIRMED','ARRIVED'].includes(row.status)).length}</strong></article><article className="card"><span>Guests seated</span><strong>{board.reservations.filter(row=>row.status==='SEATED').length}</strong></article><article className="card"><span>Occupied tables</span><strong>{count('OCCUPIED')} / {board.tables.length}</strong></article><article className="card"><span>Waiting parties</span><strong>{board.waitlist.length}</strong></article></section>
       {board.lateArrivals.length?<section className="error-state"><h2>Arrival alerts</h2>{board.lateArrivals.map(row=><p key={row.id}><a href={`/staff/host/reservations/${row.id}`}>{row.guest} · {row.reference}</a> was due at {time(row.startsAt)}.</p>)}</section>:null}

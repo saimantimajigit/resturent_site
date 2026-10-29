@@ -6,7 +6,7 @@ import {db} from '@/server/db';
 import {rejectCrossOrigin} from '@/server/request-security';
 
 const role=z.enum(['HOST','WAITER','CHEF','MANAGER','OWNER']);
-const createInput=z.object({email:z.email().trim().toLowerCase(),roleCodes:z.array(role).min(1).max(4)});
+const createInput=z.object({email:z.email().max(254).trim().toLowerCase(),roleCodes:z.array(role).min(1).max(4)});
 export async function GET(){
   try{const context=await managerContext(),members=await db.staffMembership.findMany({where:{restaurantId:context.restaurantId},include:{userRef:{select:{id:true,name:true,email:true,status:true,createdAt:true}},StaffRole_staffMembershipId:{include:{roleRef:{select:{code:true,name:true}}}}},orderBy:[{status:'asc'},{createdAt:'asc'}]});return NextResponse.json({data:{members:members.map(member=>({id:member.id,userId:member.userId,name:member.userRef.name,email:member.userRef.email,accountStatus:member.userRef.status,membershipStatus:member.status,roles:member.StaffRole_staffMembershipId.map(link=>link.roleRef.code),createdAt:member.createdAt})),canManageManagers:context.roles.includes('OWNER')}},{headers:{'Cache-Control':'no-store'}})}
   catch(error){return adminError(error,'Staff list is temporarily unavailable.')}

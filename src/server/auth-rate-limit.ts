@@ -1,5 +1,6 @@
 import {createHash} from 'node:crypto';
 import {db} from './db';
+import {rateLimitAddress} from './client-address';
 
 const WINDOW_MINUTES=15;
 const EMAIL_LIMIT=5;
@@ -7,12 +8,8 @@ const IP_LIMIT=30;
 
 function digest(value:string){return createHash('sha256').update(value).digest('hex')}
 
-function address(request:Request){
- return request.headers.get('x-real-ip')?.trim()||request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()||'unknown';
-}
-
 export function loginRateLimitKeys(request:Request,email:string){
- return {emailKey:digest(`login:email:${email.trim().toLowerCase()}`),ipKey:digest(`login:ip:${address(request)}`)};
+ return {emailKey:digest(`login:email:${email.trim().toLowerCase()}`),ipKey:digest(`login:ip:${rateLimitAddress(request,{trustedHeader:process.env.SAVORE_TRUSTED_CLIENT_IP_HEADER})}`)};
 }
 
 async function consume(key:string,limit:number){
@@ -40,12 +37,12 @@ export async function clearLoginFailures(emailKey:string){
 }
 
 export async function allowRegistrationAttempt(request:Request){
- const key=digest(`register:ip:${address(request)}`);
+ const key=digest(`register:ip:${rateLimitAddress(request,{trustedHeader:process.env.SAVORE_TRUSTED_CLIENT_IP_HEADER})}`);
  return consume(key,5);
 }
 
 export async function allowQrRequest(request:Request,operation:string,identity:string,ipLimit=60,identityLimit=30){
- const ipKey=digest(`qr:${operation}:ip:${address(request)}`);
+ const ipKey=digest(`qr:${operation}:ip:${rateLimitAddress(request,{trustedHeader:process.env.SAVORE_TRUSTED_CLIENT_IP_HEADER})}`);
  const identityKey=digest(`qr:${operation}:identity:${identity}`);
  const [ipAllowed,identityAllowed]=await Promise.all([consume(ipKey,ipLimit),consume(identityKey,identityLimit)]);
  return ipAllowed&&identityAllowed;

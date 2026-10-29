@@ -2,6 +2,7 @@
 export type Window = { dayOfWeek: number; startMinute: number; endMinute: number; active: boolean };
 export type Closure = { startsAt: Date; endsAt: Date };
 export type Policy = { advanceDays: number; cutoffMinutes: number; maxPartySize: number; durationMinutes: number; turnoverMinutes: number };
+export type OccupancyWindow={tableId:string;startsAt:Date;endsAt:Date};
 export class BookingRuleError extends Error { readonly code: string; constructor(code: string, message: string) {super(message);this.code=code} }
 export const DEMO_TIME_ZONE = 'Asia/Kolkata';
 export function parseLocalSlot(date: string, time: string): Date {
@@ -24,6 +25,10 @@ export function assertBookingAllowed(args: {date:string;time:string;partySize:nu
   if (start.getTime()>now.getTime()+policy.advanceDays*86400000) throw new BookingRuleError('ADVANCE_WINDOW','Date is beyond the booking window');
   if (closures.some(c=>start<c.endsAt&&end>c.startsAt)) throw new BookingRuleError('SERVICE_CLOSED','Restaurant is closed for this interval');
   return {start,end};
+}
+export function hasAvailableTable(tableIds:readonly string[],occupancies:readonly OccupancyWindow[],start:Date,end:Date){
+  const occupied=new Set(occupancies.filter(item=>item.startsAt<end&&item.endsAt>start).map(item=>item.tableId));
+  return tableIds.some(id=>!occupied.has(id));
 }
 export const allowedReservationTransitions: Record<string, readonly string[]> = {
   CONFIRMED:['ARRIVED','CANCELLED','NO_SHOW'],

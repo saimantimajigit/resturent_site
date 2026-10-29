@@ -6,7 +6,7 @@ import {db} from '@/server/db';
 import {allowRegistrationAttempt,rateLimitedResponse} from '@/server/auth-rate-limit';
 import {rejectCrossOrigin} from '@/server/request-security';
 
-const input=z.object({name:z.string().trim().min(2).max(100),email:z.email().transform(value=>value.trim().toLowerCase()),phone:z.string().trim().max(30).optional(),password:z.string().min(12).max(200)});
+const input=z.object({name:z.string().trim().min(2).max(100),email:z.email().max(254).transform(value=>value.trim().toLowerCase()),phone:z.string().trim().max(30).optional(),password:z.string().min(12).max(200)});
 export async function POST(request:Request){
  const rejected=rejectCrossOrigin(request);if(rejected)return rejected;
  try{

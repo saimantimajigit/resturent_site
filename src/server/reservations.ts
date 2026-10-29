@@ -2,7 +2,7 @@ import 'server-only';
 import {db} from './db';
 import {z} from 'zod';
 import {randomUUID} from 'node:crypto';
-import {assertBookingAllowed,BookingRuleError} from './booking-policy';
+import {assertBookingAllowed,BookingRuleError,hasAvailableTable} from './booking-policy';
 import {currentCustomer} from './customer';
 export {BookingRuleError} from './booking-policy';
 type BookingInput = {
@@ -13,7 +13,7 @@ type BookingInput = {
  email: string;
  notes?: string;
 };
-export const bookingInput=z.object({date:z.iso.date(),time:z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),partySize:z.number().int().min(1).max(12),name:z.string().trim().min(2).max(100),email:z.email(),notes:z.string().max(500).optional()});
+export const bookingInput=z.object({date:z.iso.date(),time:z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),partySize:z.number().int().min(1).max(12),name:z.string().trim().min(2).max(100),email:z.email().max(254),notes:z.string().max(500).optional()});
 const rid=()=>{if(!process.env.RESTAURANT_ID)throw new Error('RESTAURANT_ID missing');return process.env.RESTAURANT_ID};
 async function policyData(restaurantId:string){
  const [policy,periods,closures]=await Promise.all([
@@ -28,14 +28,15 @@ export async function slots(date:string,partySize:number){
  const restaurantId=rid();const {policy,periods,closures}=await policyData(restaurantId);
  const tables=await db.diningTable.findMany({where:{restaurantId,active:true,maxCapacity:{gte:partySize},minCapacity:{lte:partySize}}});
  const options=['18:00','18:30','19:00','19:30','20:00','20:30'];
- const result=[];
- for(const time of options){
-  let start:Date,end:Date;
-  try{({start,end}=assertBookingAllowed({date,time,partySize,now:new Date(),policy,periods,closures}))}
-  catch(e){if(e instanceof BookingRuleError){result.push({time,available:false});continue}throw e}
-  const occupied=await db.tableOccupancy.findMany({where:{restaurantId,active:true,diningTableId:{in:tables.map(t=>t.id)},startsAt:{lt:end},endsAt:{gt:start}},select:{diningTableId:true}});
-  const used=new Set(occupied.map(o=>o.diningTableId));result.push({time,available:tables.some(t=>!used.has(t.id))});
- }return result;
+ const result=options.map(time=>{
+  try{return {time,...assertBookingAllowed({date,time,partySize,now:new Date(),policy,periods,closures})}}
+  catch(error){if(error instanceof BookingRuleError)return {time,available:false as const};throw error}
+ });
+ const valid=result.filter((slot):slot is typeof slot&{start:Date;end:Date}=>'start'in slot);
+ if(!valid.length||!tables.length)return result.map(slot=>'start'in slot?{time:slot.time,available:false}:{time:slot.time,available:false});
+ const start=new Date(Math.min(...valid.map(slot=>slot.start.getTime()))),end=new Date(Math.max(...valid.map(slot=>slot.end.getTime())));
+ const occupancies=await db.tableOccupancy.findMany({where:{restaurantId,active:true,diningTableId:{in:tables.map(table=>table.id)},startsAt:{lt:end},endsAt:{gt:start}},select:{diningTableId:true,startsAt:true,endsAt:true}});
+ return result.map(slot=>({time:slot.time,available:'start'in slot&&hasAvailableTable(tables.map(table=>table.id),occupancies.map(item=>({tableId:item.diningTableId,startsAt:item.startsAt,endsAt:item.endsAt})),slot.start,slot.end)}));
 }
 export async function createBooking(data:BookingInput){
  const parsed=bookingInput.parse(data) as BookingInput,restaurantId=rid();

@@ -6,7 +6,7 @@ import {db} from '@/server/db';
 import {allowLoginAttempt,clearLoginFailures,rateLimitedResponse} from '@/server/auth-rate-limit';
 import {rejectCrossOrigin} from '@/server/request-security';
 
-const input=z.object({email:z.email().transform(value=>value.trim().toLowerCase()),password:z.string().min(1)});
+const input=z.object({email:z.email().max(254).transform(value=>value.trim().toLowerCase()),password:z.string().min(1).max(200)});
 
 export async function POST(request:Request){
  const rejected=rejectCrossOrigin(request);if(rejected)return rejected;

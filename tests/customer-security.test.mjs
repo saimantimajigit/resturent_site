@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {rateLimitAddress} from '../src/server/client-address.ts';
 
 const read=path=>readFileSync(path,'utf8');
 
@@ -54,4 +55,47 @@ test('login attempts use persistent email and IP rate limits with retry guidance
  assert.match(limiter,/IP_LIMIT=30/);
  assert.match(limiter,/Retry-After/);
  assert.match(migration,/CREATE TABLE "AuthRateLimit"/);
+});
+
+test('production rate limits ignore caller-supplied forwarding addresses unless a trusted single-value proxy header is configured',()=>{
+ const first=new Request('http://localhost/api',{headers:{'x-real-ip':'203.0.113.1','x-forwarded-for':'203.0.113.1'}});
+ const spoofed=new Request('http://localhost/api',{headers:{'x-real-ip':'198.51.100.9','x-forwarded-for':'198.51.100.9'}});
+ assert.equal(rateLimitAddress(first,{production:true}),'trusted-proxy-unconfigured');
+ assert.equal(rateLimitAddress(spoofed,{production:true}),'trusted-proxy-unconfigured');
+ assert.equal(rateLimitAddress(first,{production:true,trustedHeader:'x-real-ip'}),'203.0.113.1');
+ const clientForwardingSpoof=new Request('http://localhost/api',{headers:{'x-real-ip':'203.0.113.1','x-forwarded-for':'198.51.100.9'}});
+ assert.equal(rateLimitAddress(clientForwardingSpoof,{production:true,trustedHeader:'x-real-ip'}),'203.0.113.1');
+ assert.equal(rateLimitAddress(new Request('http://localhost/api',{headers:{'x-forwarded-for':'198.51.100.9'}}),{production:true,trustedHeader:'x-real-ip'}),'unknown');
+ assert.equal(rateLimitAddress(new Request('http://localhost/api',{headers:{'x-real-ip':'203.0.113.1, 198.51.100.9'}}),{production:true,trustedHeader:'x-real-ip'}),'unknown');
+ assert.equal(rateLimitAddress(first,{production:true,trustedHeader:'x-forwarded-for'}),'trusted-proxy-unconfigured');
+});
+
+test('session tokens are hashed, expire, honor revocation and require active accounts',()=>{
+ const session=read('src/server/session.ts');
+ assert.match(session,/createHash\('sha256'\)/);
+ assert.match(session,/session\.expiresAt<new Date\(\)/);
+ assert.match(session,/session\.revokedAt/);
+ assert.match(session,/user\?\.status==='ACTIVE'/);
+ for(const path of ['src/app/api/v1/auth/login/route.ts','src/app/api/v1/customer/login/route.ts','src/app/api/v1/customer/register/route.ts']){
+  const route=read(path);
+  assert.match(route,/randomBytes\(32\)/);
+  assert.match(route,/httpOnly:true/);
+  assert.match(route,/secure:process\.env\.NODE_ENV==='production'/);
+  assert.match(route,/sameSite:'lax'/);
+ }
+ const qrClaim=read('src/app/api/v1/qr/claim/route.ts');
+ assert.match(qrClaim,/sameSite:'strict'/);
+ assert.match(qrClaim,/path:'\/api\/v1\/qr'/);
+});
+
+test('live customer, QR, kitchen and floor status changes have polite screen-reader announcements',()=>{
+ for(const path of ['src/components/order-tracker.tsx','src/components/qr-order-tracking.tsx','src/components/order-status-action.tsx','src/components/order-queue-refresh.tsx','src/components/floor-live-board.tsx']){
+  assert.match(read(path),/aria-live="polite"/);
+ }
+ assert.match(read('src/components/qr-menu.tsx'),/role="status" aria-live="polite"/);
+ const css=read('src/app/globals.css');
+ assert.match(css,/outline:3px solid var\(--forest\).*box-shadow:0 0 0 6px var\(--gold\)/);
+ assert.match(css,/\.button-small\{min-height:44px/);
+ assert.match(css,/\.floor-actions \.button\{min-height:44px/);
+ assert.match(css,/\.qr-quantity button\{width:44px;height:44px/);
 });

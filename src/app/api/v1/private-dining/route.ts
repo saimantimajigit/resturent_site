@@ -3,7 +3,7 @@ import {z,ZodError} from 'zod';
 import {db} from '@/server/db';
 import {parseLocalSlot} from '@/server/booking-policy';
 import {rejectCrossOrigin} from '@/server/request-security';
-const input=z.object({name:z.string().trim().min(2).max(100),email:z.email(),partySize:z.coerce.number().int().min(8).max(60),date:z.iso.date(),time:z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),message:z.string().max(1000).optional()});
+const input=z.object({name:z.string().trim().min(2).max(100),email:z.email().max(254),partySize:z.coerce.number().int().min(8).max(60),date:z.iso.date(),time:z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),message:z.string().max(1000).optional()});
 export async function POST(request:Request){
  const rejected=rejectCrossOrigin(request);if(rejected)return rejected;
  try{

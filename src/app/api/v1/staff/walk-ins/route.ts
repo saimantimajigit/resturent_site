@@ -5,7 +5,7 @@ import {AuthenticationError,AuthorizationError} from '@/server/session';
 import {staffContext} from '@/server/staff-context';
 import {createWalkIn,FloorOperationError} from '@/server/floor-operations';
 
-const input=z.object({name:z.string().trim().min(2).max(100),partySize:z.number().int().min(1).max(12),email:z.email().optional().or(z.literal('')),phone:z.string().trim().max(40).optional(),notes:z.string().trim().max(500).optional(),waiterMembershipId:z.uuid().optional()});
+const input=z.object({name:z.string().trim().min(2).max(100),partySize:z.number().int().min(1).max(12),email:z.email().max(254).optional().or(z.literal('')),phone:z.string().trim().max(40).optional(),notes:z.string().trim().max(500).optional(),waiterMembershipId:z.uuid().optional()});
 export async function POST(request:Request){
   const rejected=rejectCrossOrigin(request);if(rejected)return rejected;
   try{
