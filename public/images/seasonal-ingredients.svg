@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" role="img" aria-labelledby="title desc">
+  <title id="title">Seasonal ingredients arranged for the kitchen</title>
+  <desc id="desc">An illustrated still life of leafy greens, squash, carrots, beets, herbs and a bowl on a warm ivory worktop.</desc>
+  <defs>
+    <linearGradient id="wall" x2="0" y2="1"><stop stop-color="#e8dfca"/><stop offset="1" stop-color="#d9cfb8"/></linearGradient>
+    <linearGradient id="table" x2="0" y2="1"><stop stop-color="#b28b62"/><stop offset="1" stop-color="#77563e"/></linearGradient>
+    <linearGradient id="leaf" x2="1" y2="1"><stop stop-color="#71875a"/><stop offset="1" stop-color="#263f31"/></linearGradient>
+    <linearGradient id="squash" x2="1" y2="1"><stop stop-color="#d5a451"/><stop offset="1" stop-color="#a96c36"/></linearGradient>
+    <linearGradient id="carrot" x2="0" y2="1"><stop stop-color="#d77c42"/><stop offset="1" stop-color="#a9482e"/></linearGradient>
+    <linearGradient id="bowl" x2="0" y2="1"><stop stop-color="#f2e7d1"/><stop offset="1" stop-color="#cbb99b"/></linearGradient>
+    <filter id="shadow" x="-.2" y="-.3" width="1.4" height="1.7"><feGaussianBlur stdDeviation="18"/></filter>
+    <pattern id="grain" width="80" height="80" patternUnits="userSpaceOnUse"><path d="M0 12h80M0 51h80" stroke="#fff" stroke-opacity=".08"/><circle cx="17" cy="33" r="1.4" fill="#4c3c2c" fill-opacity=".14"/><circle cx="61" cy="70" r="1" fill="#4c3c2c" fill-opacity=".12"/></pattern>
+  </defs>
+  <rect width="1200" height="800" fill="url(#wall)"/>
+  <path d="M0 546 1200 514v286H0z" fill="url(#table)"/>
+  <path d="M0 546 1200 514v286H0z" fill="url(#grain)"/>
+  <ellipse cx="607" cy="623" rx="390" ry="106" fill="#30241f" opacity=".25" filter="url(#shadow)"/>
+  <g stroke="#344d37" stroke-width="8" stroke-linecap="round" fill="url(#leaf)">
+    <path d="M306 559C271 434 276 292 357 185c20 115 10 251-51 374Z"/><path d="M342 564c-4-149 45-272 157-350-21 138-78 268-157 350Z"/>
+    <path d="M372 565c52-147 150-235 291-255-74 119-181 211-291 255Z"/><path d="M289 568c-88-83-137-186-126-313 78 91 123 202 126 313Z"/>
+    <path d="M375 570c112-113 232-165 368-137-112 87-240 139-368 137Z"/>
+    <path d="M334 495c-27-110-10-204 57-278 20 101 3 199-57 278Z" fill="#a5a96e" stroke="#657748" stroke-width="6"/>
+    <path d="M315 478c-49-91-58-175-19-252 43 83 56 167 19 252Z" fill="#a5a96e" stroke="#657748" stroke-width="6"/>
+  </g>
+  <g fill="none" stroke="#d6bd75" stroke-width="4" opacity=".7"><path d="M354 531 357 208M350 523l-27-208M377 538l142-300M378 543l259-210M326 536 173 284"/></g>
+  <g transform="translate(510 461)">
+    <path d="M-135 84c2-88 63-157 151-157 89 0 149 69 151 157-34 44-91 69-151 69-61 0-118-25-151-69Z" fill="url(#squash)" stroke="#83552d" stroke-width="7"/>
+    <path d="M-63-54c-20 39-28 90-20 142M0-70c-12 46-13 100 0 151M64-54c20 39 28 90 20 142" fill="none" stroke="#e8bd71" stroke-width="8" opacity=".7"/>
+    <path d="M-6-72c-1-27 11-42 33-47 11 22 3 38-22 50" fill="#596a3d" stroke="#354b34" stroke-width="5"/>
+  </g>
+  <g transform="translate(785 532) rotate(-15)">
+    <path d="M0-156c24 79 50 181 62 264-18 27-45 38-65 30-20-8-27-29-23-54 11-78 15-160 26-240Z" fill="url(#carrot)" stroke="#934c31" stroke-width="6"/>
+    <path d="M-3-136-52-200M11-142l2-79M26-147l59-66" fill="none" stroke="#5a6c3d" stroke-width="16" stroke-linecap="round"/>
+    <path d="M9-104 20 78M-2-72l-7 112" fill="none" stroke="#f0a45c" stroke-width="5" opacity=".7"/>
+  </g>
+  <g transform="translate(923 584)">
+    <path d="M-81-21c4-66 39-107 81-107s77 41 81 107c-20 26-47 40-81 40s-61-14-81-40Z" fill="#9a493e" stroke="#6e302e" stroke-width="6"/>
+    <path d="M0-128c-8-28 0-47 23-56 11 25 4 43-18 58M-2-130c-20-24-40-27-58-9 20 20 39 24 58 13" fill="#637447" stroke="#40563a" stroke-width="5"/>
+    <path d="M-44-39c21 8 48 8 88-3" fill="none" stroke="#c8755b" stroke-width="6" opacity=".7"/>
+  </g>
+  <g transform="translate(635 602)">
+    <path d="M-126-25c0 93 53 145 126 145s126-52 126-145Z" fill="url(#bowl)" stroke="#887b68" stroke-width="7"/>
+    <ellipse cy="-26" rx="126" ry="36" fill="#f3ead8" stroke="#887b68" stroke-width="7"/>
+    <ellipse cy="-25" rx="98" ry="22" fill="#9a7555"/>
+    <g fill="#d7b66f"><circle cx="-52" cy="-27" r="8"/><circle cx="-8" cy="-33" r="7"/><circle cx="34" cy="-18" r="8"/><circle cx="64" cy="-33" r="6"/><circle cx="11" cy="-13" r="5"/></g>
+  </g>
+  <g fill="#d1b877" opacity=".85"><circle cx="160" cy="673" r="5"/><circle cx="196" cy="705" r="3"/><circle cx="1024" cy="694" r="5"/><circle cx="1065" cy="661" r="3"/><circle cx="456" cy="690" r="4"/></g>
+  <rect width="1200" height="800" fill="#1c281e" opacity=".06"/>
+</svg>

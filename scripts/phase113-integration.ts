@@ -12,8 +12,17 @@ const base=target.origin,restaurantId=process.env.RESTAURANT_ID!,run=randomUUID(
 const digest=(value:string)=>createHash('sha256').update(value).digest('hex');
 const headers=(cookie?:string,origin=base)=>({Origin:origin,'X-Real-IP':ip,...(cookie?{Cookie:cookie}:{})});
 async function request(path:string,init:RequestInit={},cookie?:string){return fetch(`${base}${path}`,{...init,headers:{...headers(cookie),...(init.headers||{})}})}
-async function json(response:Response){return response.json() as Promise<any>}
-async function status(response:Response,expected:number){if(response.status!==expected)throw new Error(`Expected HTTP ${expected}, got ${response.status}: ${await response.text()}`)}
+async function json(response:Response){
+ const contentType=response.headers.get('content-type')||'(missing content-type)';
+ const body=await response.text();
+ try{return JSON.parse(body)}catch{
+  const kind=/^\s*<!doctype html|^\s*<html/i.test(body)?'HTML document':body?'non-JSON text':'empty body';
+  const location=response.headers.get('location');
+  const finalPath=response.redirected?new URL(response.url).pathname:undefined;
+  throw new Error(`Expected JSON but received HTTP ${response.status} (${contentType}), ${kind}${location?`, redirect=${location}`:''}${finalPath?`, followed redirect to ${finalPath}`:''}. Target=${base}`);
+ }
+}
+async function status(response:Response,expected:number){if(response.status!==expected){const body=await response.text(),contentType=response.headers.get('content-type')||'(missing content-type)',kind=/^\s*<!doctype html|^\s*<html/i.test(body)?'HTML document':body?'non-JSON text':'empty body',location=response.headers.get('location'),finalPath=response.redirected?new URL(response.url).pathname:undefined;throw new Error(`Expected HTTP ${expected}; got ${response.status} (${contentType}), ${kind}${location?`, redirect=${location}`:''}${finalPath?`, followed redirect to ${finalPath}`:''}. Target=${base}`)}}
 function pass(label:string){console.log(`PASS ${label}`)}
 function cookie(response:Response,name:string){const value=response.headers.getSetCookie?.().find(item=>item.startsWith(`${name}=`))||'';assert.ok(value,`Expected ${name} cookie`);return value.split(';',1)[0]}
 async function staffCookie(roleCode:'HOST'|'WAITER'|'CHEF'|'MANAGER'){
