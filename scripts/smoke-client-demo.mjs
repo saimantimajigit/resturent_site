@@ -6,9 +6,9 @@ const secretPath = resolve(process.cwd(), '.env.client-demo');
 if (!existsSync(secretPath)) throw new Error('Run npm run demo:prepare first.');
 const env = dotenv.parse(readFileSync(secretPath));
 const origin = process.env.SAVORE_DEMO_BASE_URL || env.NEXT_PUBLIC_SITE_URL || 'http://127.0.0.1:3015';
-const qrCode = env.DEMO_QR_T03_TOKEN;
+const qrCode = env.DEMO_QR_ACTIVE_TOKEN || env.DEMO_QR_T03_TOKEN;
 if (!/^savore_client_demo_[a-z0-9_]+$/.test(decodeURIComponent(new URL(env.DATABASE_URL).pathname.slice(1))) || !/^[a-f0-9]{64}$/i.test(qrCode || '')) {
-  throw new Error('Demo smoke checks require the isolated database and local QR fixture.');
+  throw new Error('Demo smoke checks require the isolated database and a prepared local QR identity.');
 }
 
 const checks = [];
@@ -71,14 +71,15 @@ await page('/staff/admin', managerCookie);
 await page('/staff/admin/reports', managerCookie);
 const ownerCookie = await staffLogin('owner', 'owner.demo@savore.example.test', env.DEMO_OWNER_PASSWORD);
 await page('/staff/admin/settings', ownerCookie);
+await page('/staff/admin/team', ownerCookie);
 
-await page(`/qr/${qrCode}`, '', 200, 'T03 QR welcome page');
+await page(`/qr/${qrCode}`, '', 200, `${env.DEMO_QR_ACTIVE_TABLE_LABEL || 'T03'} QR welcome page`);
 const claim = await request('/api/v1/qr/claim', {
   method: 'POST', headers: { 'Content-Type': 'application/json', Origin: origin },
   body: JSON.stringify({ code: qrCode }),
 });
 const qrCookie = (claim.headers.getSetCookie?.() || []).map((value) => value.split(';', 1)[0]).find((value) => value.startsWith('savore_qr_access=')) || '';
-check('occupied T03 QR claim succeeds', claim.status === 200 && Boolean(qrCookie));
+check('current occupied demo QR claim succeeds', claim.status === 200 && Boolean(qrCookie));
 const qrMenu = await request('/api/v1/qr/menu', { headers: { Cookie: qrCookie } });
 check('QR guest can read the published menu', qrMenu.status === 200);
 

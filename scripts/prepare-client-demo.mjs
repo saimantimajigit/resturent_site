@@ -8,17 +8,34 @@ import pg from 'pg';
 const { Client } = pg;
 const root = process.cwd();
 const sourceEnvPath = resolve(root, '.env');
+const migrationEnvPath = resolve(root, '.env.migrations');
+const adminEnvPath = resolve(root, '.env.savore-admin');
 const demoEnvPath = resolve(root, '.env.client-demo');
-if (!existsSync(sourceEnvPath)) throw new Error('The existing ignored .env file is required for local PostgreSQL access.');
+if (!existsSync(sourceEnvPath) || !existsSync(migrationEnvPath) || !existsSync(adminEnvPath)) {
+  throw new Error('The ignored runtime, migration, and administrator environment files are required for local PostgreSQL access.');
+}
 
 const baseEnv = dotenv.parse(readFileSync(sourceEnvPath));
-if (!baseEnv.DATABASE_URL) throw new Error('The existing .env must define DATABASE_URL.');
+const migrationConfig = dotenv.parse(readFileSync(migrationEnvPath));
+const adminConfig = dotenv.parse(readFileSync(adminEnvPath));
+if (!baseEnv.DATABASE_URL || !migrationConfig.MIGRATION_DATABASE_URL || !adminConfig.SAVORE_ADMIN_DATABASE_URL) {
+  throw new Error('The ignored SAVORÉ environment files are incomplete.');
+}
 const sourceUrl = new URL(baseEnv.DATABASE_URL);
+const sourceMigrationUrl = new URL(migrationConfig.MIGRATION_DATABASE_URL);
+const adminUrl = new URL(adminConfig.SAVORE_ADMIN_DATABASE_URL);
 if (!['localhost', '127.0.0.1', '::1'].includes(sourceUrl.hostname) || sourceUrl.port !== '5433') {
   throw new Error('Demo preparation only supports the local PostgreSQL endpoint at localhost:5433.');
 }
-const adminUrl = new URL(sourceUrl);
-adminUrl.pathname = '/postgres';
+if (sourceUrl.username !== 'savore_app' || sourceMigrationUrl.username !== 'savore_migrator') {
+  throw new Error('Runtime and migration URLs must use their dedicated least-privilege roles.');
+}
+if (!['localhost', '127.0.0.1', '::1'].includes(adminUrl.hostname) || adminUrl.port !== '5433' || adminUrl.username !== 'savore' || decodeURIComponent(adminUrl.pathname.slice(1)) !== 'postgres') {
+  throw new Error('The protected administrator URL must target the local PostgreSQL maintenance database.');
+}
+if (sourceMigrationUrl.hostname !== sourceUrl.hostname || sourceMigrationUrl.port !== sourceUrl.port || decodeURIComponent(sourceMigrationUrl.pathname.slice(1)) !== decodeURIComponent(sourceUrl.pathname.slice(1))) {
+  throw new Error('Runtime and migration URLs must target the same local database.');
+}
 const admin = new Client({ connectionString: adminUrl.toString(), application_name: 'savore-client-demo-setup' });
 await admin.connect();
 
@@ -31,13 +48,19 @@ let demoDatabase;
 let markedDemoDatabase = false;
 if (existsSync(demoEnvPath)) {
   demoEnv = dotenv.parse(readFileSync(demoEnvPath));
-  if (!demoEnv.DATABASE_URL || !demoEnv.RESTAURANT_ID) throw new Error('Existing .env.client-demo is incomplete; it was preserved for review.');
+  if (!demoEnv.DATABASE_URL || !demoEnv.MIGRATION_DATABASE_URL || !demoEnv.RESTAURANT_ID) throw new Error('Existing .env.client-demo is incomplete; it was preserved for review.');
   const demoUrl = new URL(demoEnv.DATABASE_URL);
+  const demoMigrationUrl = new URL(demoEnv.MIGRATION_DATABASE_URL);
   demoDatabase = decodeURIComponent(demoUrl.pathname.slice(1));
   if (!/^savore_client_demo_[a-z0-9_]+$/.test(demoDatabase) || demoUrl.protocol !== sourceUrl.protocol || demoUrl.hostname !== sourceUrl.hostname || demoUrl.port !== sourceUrl.port) {
     throw new Error('Existing .env.client-demo must target a local savore_client_demo_* database; it was preserved.');
   }
-  if (demoUrl.username !== sourceUrl.username || demoUrl.password !== sourceUrl.password) throw new Error('Demo and local PostgreSQL credentials differ; existing demo credentials were preserved.');
+  if (demoUrl.username !== sourceUrl.username || demoUrl.password !== sourceUrl.password || demoMigrationUrl.username !== sourceMigrationUrl.username || demoMigrationUrl.password !== sourceMigrationUrl.password) {
+    throw new Error('Demo and local PostgreSQL role credentials differ; existing demo credentials were preserved.');
+  }
+  if (decodeURIComponent(demoMigrationUrl.pathname.slice(1)) !== demoDatabase || demoMigrationUrl.hostname !== demoUrl.hostname || demoMigrationUrl.port !== demoUrl.port) {
+    throw new Error('Demo runtime and migration URLs must target the same isolated database.');
+  }
   if (await databaseExists(demoDatabase)) {
     const targetClient = new Client({ connectionString: demoEnv.DATABASE_URL, application_name: 'savore-client-demo-preflight' });
     await targetClient.connect();
@@ -64,8 +87,12 @@ if (existsSync(demoEnvPath)) {
   const demoUrl = new URL(sourceUrl);
   demoUrl.pathname = `/${demoDatabase}`;
   demoUrl.searchParams.set('schema', 'public');
+  const demoMigrationUrl = new URL(sourceMigrationUrl);
+  demoMigrationUrl.pathname = `/${demoDatabase}`;
+  demoMigrationUrl.searchParams.set('schema', 'public');
   demoEnv = {
     DATABASE_URL: demoUrl.toString(),
+    MIGRATION_DATABASE_URL: demoMigrationUrl.toString(),
     RESTAURANT_ID: baseEnv.RESTAURANT_ID || randomUUID(),
     NEXT_PUBLIC_SITE_URL: 'http://localhost:3015',
     SAVORE_TRUSTED_CLIENT_IP_HEADER: 'x-real-ip',
@@ -99,16 +126,34 @@ try {
       ? 'Found the marked isolated client demo database; no database was reset.'
       : 'Found the previously created empty demo target; no existing records were changed.');
   }
+  const targetAdminUrl = new URL(adminUrl);
+  targetAdminUrl.pathname = `/${demoDatabase}`;
+  const targetAdmin = new Client({ connectionString: targetAdminUrl.toString(), application_name: 'savore-client-demo-database-bootstrap' });
+  await targetAdmin.connect();
+  try {
+    await targetAdmin.query('CREATE EXTENSION IF NOT EXISTS btree_gist');
+    await targetAdmin.query(`GRANT CONNECT ON DATABASE "${demoDatabase}" TO savore_app, savore_migrator`);
+    await targetAdmin.query('GRANT USAGE, CREATE ON SCHEMA public TO savore_migrator');
+    await targetAdmin.query('ALTER DEFAULT PRIVILEGES FOR ROLE savore_migrator IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO savore_app');
+    await targetAdmin.query('ALTER DEFAULT PRIVILEGES FOR ROLE savore_migrator IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO savore_app');
+  } finally {
+    await targetAdmin.end();
+  }
 } finally {
   await admin.end();
 }
 
-const runtimeEnv = { ...process.env, ...demoEnv };
-function run(command, args) {
-  const result = spawnSync(command, args, { cwd: root, env: runtimeEnv, encoding: 'utf8', windowsHide: true, maxBuffer: 8 * 1024 * 1024 });
+const migrationChildEnv = { ...process.env, ...demoEnv };
+delete migrationChildEnv.DATABASE_URL;
+delete migrationChildEnv.SAVORE_ADMIN_DATABASE_URL;
+const runtimeChildEnv = { ...process.env, ...demoEnv };
+delete runtimeChildEnv.MIGRATION_DATABASE_URL;
+delete runtimeChildEnv.SAVORE_ADMIN_DATABASE_URL;
+function run(command, args, childEnv) {
+  const result = spawnSync(command, args, { cwd: root, env: childEnv, encoding: 'utf8', windowsHide: true, maxBuffer: 8 * 1024 * 1024 });
   const redact = (value) => {
     let safe = value || '';
-    for (const secret of [demoEnv.DATABASE_URL, ...Object.entries(demoEnv).filter(([key]) => key.endsWith('_PASSWORD') || key.endsWith('_TOKEN')).map(([, value]) => value)]) {
+    for (const secret of [demoEnv.DATABASE_URL, demoEnv.MIGRATION_DATABASE_URL, ...Object.entries(demoEnv).filter(([key]) => key.endsWith('_PASSWORD') || key.endsWith('_TOKEN')).map(([, value]) => value)]) {
       if (secret) safe = safe.split(secret).join('[REDACTED]');
     }
     return safe;
@@ -120,8 +165,8 @@ function run(command, args) {
 }
 
 const node = process.execPath;
-run(node, [resolve(root, 'node_modules/prisma/build/index.js'), 'migrate', 'deploy']);
-run(node, [resolve(root, 'node_modules/prisma/build/index.js'), 'migrate', 'status']);
-run(node, [resolve(root, 'node_modules/prisma/build/index.js'), 'generate']);
-run(node, [resolve(root, 'node_modules/tsx/dist/cli.mjs'), 'prisma/seed-client-demo.ts']);
-console.log('Setup complete. Secrets remain only in ignored .env.client-demo; no password or QR token was printed.');
+run(node, [resolve(root, 'node_modules/prisma/build/index.js'), 'migrate', 'deploy'], migrationChildEnv);
+run(node, [resolve(root, 'node_modules/prisma/build/index.js'), 'migrate', 'status'], migrationChildEnv);
+run(node, [resolve(root, 'node_modules/prisma/build/index.js'), 'generate'], runtimeChildEnv);
+run(node, [resolve(root, 'node_modules/tsx/dist/cli.mjs'), 'prisma/seed-client-demo.ts'], runtimeChildEnv);
+console.log('Setup complete. Demo account and QR secrets remain in ignored .env.client-demo; database role credentials remain in separate ignored files. No credential was printed.');

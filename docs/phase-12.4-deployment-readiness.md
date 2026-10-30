@@ -21,6 +21,8 @@ Production release remains blocked on a real domain, TLS and trusted-ingress ver
 | `PORT`, `HOSTNAME` | Platform | Next.js listener settings; the container defaults to port 3000 and `0.0.0.0`. |
 | `NODE_ENV` | Platform | Set to `production` by the runtime/container. |
 
+`MIGRATION_DATABASE_URL` is a separate deployment-job secret for `prisma migrate deploy` and status checks. Do not inject it into the Next.js runtime container. Grant the migration login only the target database/schema access needed to apply reviewed migrations; keep bootstrap/extension installation authority in a separately controlled operator process.
+
 Production-style example with placeholders only (do not copy the example values):
 
 ```dotenv
@@ -33,7 +35,7 @@ PORT=3000
 HOSTNAME=0.0.0.0
 ```
 
-Never put a real `.env` file, password, private key, or database URL in Git, a container build argument, image layer, browser bundle, support ticket, or log. Inject secrets at runtime from the hosting platform's secret manager. Rotate database credentials through the provider and update the runtime secret without changing application source. `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` are for local container initialization; `DEMO_HOST_PASSWORD` is demo seeding/testing only. Do not run the demo seed in production. `SAVORE_NEXT_DEV_DIST_DIR` and the `PHASE*` base URLs are development/test-only.
+Never put a real `.env` file, password, private key, or database URL in Git, a container build argument, image layer, browser bundle, support ticket, or log. Inject the runtime and migration secrets separately from the hosting platform's secret manager. `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` are container initialization metadata and do not rotate an already-initialized PostgreSQL role; `DEMO_HOST_PASSWORD` is demo seeding/testing only. Do not run the demo seed in production. `SAVORE_NEXT_DEV_DIST_DIR` and the `PHASE*` base URLs are development/test-only.
 
 The Docker builder uses a fixed, non-secret local placeholder database URL only to let Prisma 7 evaluate its datasource while generating the client. It does not connect to that address. Supply the verified non-secret canonical URL with `--build-arg NEXT_PUBLIC_SITE_URL=https://your-verified-host`; never pass database credentials as build arguments.
 

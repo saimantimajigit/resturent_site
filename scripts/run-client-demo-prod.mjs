@@ -16,6 +16,8 @@ const childEnv = {
   HOSTNAME: '127.0.0.1',
   SAVORE_DEMO_BASE_URL: 'http://localhost:3016',
 };
+delete childEnv.MIGRATION_DATABASE_URL;
+delete childEnv.SAVORE_ADMIN_DATABASE_URL;
 const server = spawn(process.execPath, [resolve(process.cwd(), 'node_modules/next/dist/bin/next'), 'start', '-p', '3016', '-H', '127.0.0.1'], {
   cwd: process.cwd(), env: childEnv, stdio: 'inherit', windowsHide: true,
 });

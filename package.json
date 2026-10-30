@@ -12,6 +12,8 @@
     "demo:verify": "node scripts/verify-client-demo.mjs",
     "demo:smoke": "node scripts/smoke-client-demo.mjs",
     "demo:rotate-qr": "node scripts/rotate-demo-qr.mjs",
+    "demo:qr:prepare": "node scripts/phase1262-demo-journey.mjs --prepare-only",
+    "demo:journey": "node scripts/phase1262-demo-journey.mjs",
     "demo:start:prod": "node scripts/run-client-demo-prod.mjs",
     "demo:start": "node scripts/run-client-demo.mjs",
     "db:seed:client-demo": "tsx prisma/seed-client-demo.ts",

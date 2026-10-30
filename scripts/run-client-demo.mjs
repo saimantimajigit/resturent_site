@@ -14,6 +14,8 @@ const childEnv = {
   NODE_ENV: 'development',
   SAVORE_NEXT_DEV_DIST_DIR: '.next-dev-phase125',
 };
+delete childEnv.MIGRATION_DATABASE_URL;
+delete childEnv.SAVORE_ADMIN_DATABASE_URL;
 const server = spawn(process.execPath, [resolve(process.cwd(), 'node_modules/next/dist/bin/next'), 'dev', '-p', '3015', '-H', '127.0.0.1'], {
   cwd: process.cwd(), env: childEnv, stdio: 'inherit', windowsHide: true,
 });
